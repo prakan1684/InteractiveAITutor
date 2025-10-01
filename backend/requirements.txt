@@ -23,3 +23,8 @@ pytest==7.4.3
 
 chromadb==0.4.15
 sentence-transformers==2.2.2
+# CLIP for image embeddings
+torch==2.1.1
+torchvision==0.16.1
+clip-by-openai==1.0
+open-clip-torch==2.24.0
