@@ -237,15 +237,15 @@
                 
                 <div class="upload-area" id="uploadArea">
                     <div>
-                        <p style="font-size: 1.2em; margin-bottom: 10px;">📁 Drop your PDF here</p>
-                        <p style="color: #666; margin-bottom: 15px;">or click to browse</p>
+                        <p style="font-size: 1.2em; margin-bottom: 10px;">📁 Drop your files here</p>
+                        <p style="color: #666; margin-bottom: 15px;">PDFs, Images (JPG, PNG, etc.) or click to browse</p>
                         <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
                             Choose File
                         </button>
                     </div>
                 </div>
 
-                <input type="file" id="fileInput" class="file-input" accept=".pdf">
+                <input type="file" id="fileInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp">
                 
                 <div id="uploadStatus"></div>
 
@@ -262,13 +262,13 @@
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="message ai">
-                        <strong>AI Tutor:</strong> Hello! Upload a document and I'll help you understand its content. Ask me questions about your textbooks, papers, or any PDF documents.
+                        <strong>AI Tutor:</strong> Hello! Upload documents or images and I'll help you understand their content. I can search across ALL your uploaded materials to answer your questions.
                     </div>
                 </div>
 
                 <div class="chat-input-area">
                     <input type="text" id="chatInput" class="chat-input" 
-                           placeholder="Ask a question about your document..." 
+                           placeholder="Ask a question about any of your uploaded materials..." 
                            onkeypress="handleKeyPress(event)">
                     <button class="send-btn" onclick="sendMessage()">Send</button>
                 </div>
@@ -278,7 +278,6 @@
 
     <script>
         const API_BASE = 'http://127.0.0.1:8000';
-        let selectedDocument = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -292,7 +291,11 @@
             const fileInput = document.getElementById('fileInput');
 
             // Click to upload
-            uploadArea.addEventListener('click', () => fileInput.click());
+            uploadArea.addEventListener('click', (e) => {
+                if (e.target === uploadArea || uploadArea.contains(e.target)) {
+                    fileInput.click();
+                }
+            });
 
             // Drag and drop
             uploadArea.addEventListener('dragover', (e) => {
@@ -323,8 +326,11 @@
 
         // Upload file
         async function uploadFile(file) {
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                showStatus('Please select a PDF file', 'error');
+            const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+            const fileExt = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+            
+            if (!validExtensions.includes(fileExt)) {
+                showStatus('Please select a PDF or image file (JPG, PNG, GIF, BMP, WEBP)', 'error');
                 return;
             }
 
@@ -342,7 +348,12 @@
                 const result = await response.json();
                 
                 if (result.status === 'success') {
-                    showStatus(`✅ Document uploaded and processed successfully! (${result.processing_result.num_chunks} chunks created)`, 'success');
+                    const chunks = result.processing_result.num_chunks;
+                    const fileType = result.file_type || 'document';
+                    const successMsg = fileType === 'image' 
+                        ? `✅ Image uploaded and analyzed successfully!`
+                        : `✅ Document uploaded and processed successfully! (${chunks} chunks created)`;
+                    showStatus(successMsg, 'success');
                     loadDocuments();
                 } else {
                     showStatus(`❌ Upload failed: ${result.error}`, 'error');
@@ -362,7 +373,7 @@
                 
                 if (result.documents && result.documents.length > 0) {
                     documentsList.innerHTML = result.documents.map(doc => 
-                        `<div class="document-item" onclick="selectDocument('${doc}')">${doc}</div>`
+                        `<div class="document-item">${doc}</div>`
                     ).join('');
                 } else {
                     documentsList.innerHTML = '<p style="color: #999; font-style: italic;">No documents uploaded yet</p>';
@@ -372,18 +383,9 @@
             }
         }
 
-        // Select document
-        function selectDocument(docName) {
-            selectedDocument = docName;
-            
-            // Update UI
-            document.querySelectorAll('.document-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            
-            event.target.classList.add('selected');
-            
-            addMessage('system', `📄 Selected document: ${docName}`);
+        // Document info display (no selection needed)
+        function showDocumentInfo(docName) {
+            addMessage('system', `📄 Document available: ${docName}`);
         }
 
         // Send message
@@ -392,18 +394,13 @@
             const message = input.value.trim();
             
             if (!message) return;
-            
-            if (!selectedDocument) {
-                addMessage('system', '⚠️ Please select a document first');
-                return;
-            }
 
             // Add user message
             addMessage('user', message);
             input.value = '';
 
             // Show loading
-            const loadingMsg = addMessage('ai', '🤔 Thinking...');
+            const loadingMsg = addMessage('ai', '🤔 Searching across all documents...');
 
             try {
                 const response = await fetch(`${API_BASE}/chat`, {
@@ -413,7 +410,6 @@
                     },
                     body: JSON.stringify({
                         message: message,
-                        document_name: selectedDocument,
                         use_rag: true
                     })
                 });

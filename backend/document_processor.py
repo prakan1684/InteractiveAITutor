@@ -164,38 +164,58 @@ def store_chunks_in_vector_db(chunks: List[Dict], document_name:str) -> str:
         return None
 
         
-def retrieve_relevant_chunks(query: str, document_name: str, top_k: int = 3) -> List[Dict]:
+def retrieve_relevant_chunks(query: str, top_k: int = 3) -> List[Dict]:
     try:
-        print(f"searching for {query} in {document_name}")
+
+        #get all collections from chroma
+        all_collections = chroma_client.list_collections()
+
+        if not all_collections:
+            return[]
         
-        collection_name = document_name.replace(" ", "_").replace(".", "_").replace("-", "_").lower()
-        collection = chroma_client.get_collection(name=collection_name)  # Use get_collection, not get_or_create
+
+        all_chunks = []
+        for collection_info in all_collections:
+            try:    
+                collection = chroma_client.get_collection(name=collection_info.name)
+
+
+                results = collection.query(
+                    query_texts = [query],
+                    n_results = min(top_k, 10)
+                )
+
+                documents = results["documents"][0]
+                metadatas = results["metadatas"][0]
+                distances = results.get('distances', [None])[0]
+
+                for i in range(len(documents)):
+                    chunk_data = {
+                        "text": documents[i],
+                        "metadata": metadatas[i],
+                        "similarity_score": 1- distances[i] if distances and distances[i] is not None else None,
+                        "collection_name": collection_info.name,
+                        "document_name": metadatas[i].get("document_name", collection_info.name),
+                        "content_type": metadatas[i].get("content_type", "text")
+                    }
+                    all_chunks.append(chunk_data)
+            except Exception as e:
+                print(f"Error retrieving chunks from collection {collection_info.name}: {e}")
+                continue
+    
+        all_chunks.sort(key=lambda x: x['similarity_score'] or 0, reverse=True)
+
+        # Take top_k results and add rank
+        final_chunks = all_chunks[:top_k]
+        for i, chunk in enumerate(final_chunks):
+            chunk["rank"] = i + 1
         
-        results = collection.query(
-            query_texts=[query],
-            n_results=top_k
-        )
-        
-        # Extract results for our single query (cleaner approach)
-        documents = results['documents'][0]      # Documents for query 0
-        metadatas = results['metadatas'][0]      # Metadata for query 0  
-        distances = results.get('distances', [None])[0]  # Distances for query 0
-        
-        relevant_chunks = []
-        for i in range(len(documents)):
-            chunk_data = {
-                "text": documents[i],
-                "metadata": metadatas[i],
-                "similarity_score": 1 - distances[i] if distances and distances[i] is not None else None,
-                "rank": i + 1
-            }
-            relevant_chunks.append(chunk_data)
-        
-        return relevant_chunks
-        
+        print(f"✅ Found {len(final_chunks)} relevant chunks from {len(all_collections)} collections")
+        return final_chunks
     except Exception as e:
-        print(f"Error searching for relevant chunks: {e}")
-        return [] 
+        print(f"Error retrieving relevant chunks: {e}")
+        return []
+    
 
 
 def get_available_documents() -> List[str]:

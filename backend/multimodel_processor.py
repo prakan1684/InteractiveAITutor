@@ -299,53 +299,96 @@ class MultimodelProcessor:
                 "message":f"Failed to process image: {image_path}",
                 "error_code": "IMAGE_PROCESSING_FAILED"
             }
-            
-            
+    def process_pdf(self, pdf_path:str, document_name: Optional[str] = None) -> Dict:
+        """
+        Process a pdf document for the multimodal processor.
+
+        Args:
+            pdf_path (str): Path to the pdf file.
+            document_name (Optional[str], optional): Name of the document. Defaults to None.
+
+        Returns:
+            Dict: Analysis results.
+
+        """
+
+        try:
+            if not os.path.exists(pdf_path):
+                return{
+                    "status":"error",
+                    "message":f"PDF file not found : {pdf_path}",
+                    "error_code": "FILE_NOT_FOUND"
+                }
+            #use existing process_document method
+            from document_processor import process_document
+
+            print(f"processing dpdf using existing pipeline: {pdf_path}")
+
+            result = process_document(pdf_path)
 
 
-def test():
-    try:
-        processor = MultimodelProcessor()
-        
-        test_image = "./tests/dog.jpeg"
-        result = processor.process_image(test_image)
-        print(f"Image processed successfully {test_image}")
+            if result['status'] == 'success':
+                pdf_path_obj = Path(pdf_path)
+                result.update({
+                    "content_type": "text",
+                    "pdf_path": str(pdf_path),
+                    "file_name": pdf_path_obj.name,
+                    "file_size": pdf_path_obj.stat().st_size,
+                    "processed_at": datetime.now().isoformat()
+                })
+            return result
 
-        #store in chromadb
-        collection_name = processor.store_image_analysis(result)
+        except Exception as e:
+            return {
+                "status":"error",
+                "message":f"Failed to process pdf: {pdf_path}",
+                "error_code": "PDF_PROCESSING_FAILED"
+            }
+    def process_any_document(self, file_path:str, document_name:Optional[str] = None) -> Dict:
 
-        if not collection_name:
-            print("Failed to store image analysis")
-            return False
+        """
+        process any supported document types(pdf or image).
 
-        #test global search
-        test_queries = [
-            "What is this?",
-            "What breed of dog is this?",
-            "What animal is shown?",
-            "Describe the appearance",
-            "What can students learn?"
-        ]
-        for i, query in enumerate(test_queries, 1):
-            print(f"Test {i}: {query}")
+        args:
+            file_path (str): Path to the file.
+            document_name (Optional[str], optional): Name of the document. Defaults to None.
 
-            search_result = processor.search_content(query, top_k=3)
+        Returns:
+            Dict: Analysis results.
 
-            if search_result["status"] == "success":
-                print(f"  ✅ Found {search_result['total_results']} results from {search_result['total_collections_searched']} collections")
-                
-                for result in search_result["results"]:
-                    print(f"    - {result['source_info']['type']} (from {result['document_name']}): {result['content'][:80]}...")
-                    print(f"      Similarity: {result['similarity_score']:.3f}")
+        """
+
+
+        try:
+            file_path_obj = Path(file_path)
+            file_extension = file_path_obj.suffix.lower()
+
+            #routing to appropriate method based on file extension
+            if file_extension == ".pdf":
+                return self.process_pdf(file_path, document_name)
+            elif file_extension in self.supported_image_types:
+                image_result = self.process_image(file_path, document_name)
+                if image_result['status'] == 'success':
+                    collection_name = self.store_image_analysis(image_result)
+                    if collection_name:
+                        image_result["vector_collection"] = collection_name
+                return image_result
             else:
-                print(f"  ❌ Search failed: {search_result['message']}")
-        processor.chroma_client.delete_collection(collection_name)
+                return {
+                    "status":"error",
+                    "message":f"Unsupported file format: {file_extension}",
+                    "error_code": "UNSUPPORTED_FILE_FORMAT"
+                }
+        except Exception as e:
+            return {
+                "status":"error",
+                "message":f"Failed to process document: {file_path}",
+                "error_code": "DOCUMENT_PROCESSING_FAILED"
+            }
+                    
+                
 
-        return True
-    except Exception as e:
-        print(f"Error getting status: {e}")
-        return False
-
+     
 if __name__ == "__main__":
     test()
     

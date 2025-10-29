@@ -2,6 +2,8 @@ from openai import OpenAI
 import os
 from typing import Optional, Dict
 from dotenv import load_dotenv
+import base64
+
 
 
 load_dotenv()
@@ -144,7 +146,7 @@ Be precise and comprehensive - students will use this analysis for studying."""
         """
 
         result = self.analyze_image(image_path, user_query="Provide a brief 2-3 sentence summary of the image.")
-        if result["sucess"]:
+        if result["success"]:
             return result["analysis"]
         else:
             return f"Error analyzing image: {result['error']}"
