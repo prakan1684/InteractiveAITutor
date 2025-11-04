@@ -4,8 +4,7 @@ import json
 from typing import List, Dict
 
 import chromadb
-from chromadb.api.collection_configuration import collection_configuration_to_json
-from chromadb.config import Settings
+
 import uuid
 
 chroma_client = chromadb.PersistentClient(path="./vector_db")

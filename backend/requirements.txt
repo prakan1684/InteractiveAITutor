@@ -8,6 +8,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # AI & ML
+httpx<0.25.0
 openai==1.3.0
 
 # File Processing
@@ -26,5 +27,4 @@ sentence-transformers==2.2.2
 # CLIP for image embeddings
 torch==2.1.1
 torchvision==0.16.1
-clip-by-openai==1.0
 open-clip-torch==2.24.0

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive AI Tutor</title>
+    <title>Pocket Professor - Your AI Study Companion</title>
     <style>
         * {
             margin: 0;
@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -28,10 +28,11 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
             padding: 30px;
             text-align: center;
+            border-bottom: 3px solid #f39c12;
         }
 
         .header h1 {
@@ -46,7 +47,7 @@
 
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 300px 1fr;
             gap: 0;
             min-height: 600px;
         }
@@ -83,13 +84,13 @@
         }
 
         .upload-area:hover {
-            border-color: #4facfe;
-            background: #f0f8ff;
+            border-color: #f39c12;
+            background: #fef5e7;
         }
 
         .upload-area.dragover {
-            border-color: #4facfe;
-            background: #e6f3ff;
+            border-color: #f39c12;
+            background: #fdebd0;
         }
 
         .file-input {
@@ -97,7 +98,7 @@
         }
 
         .upload-btn {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -105,6 +106,7 @@
             cursor: pointer;
             font-size: 1em;
             transition: transform 0.2s ease;
+            font-weight: 600;
         }
 
         .upload-btn:hover {
@@ -128,12 +130,12 @@
         }
 
         .document-item:hover {
-            background: #f0f8ff;
+            background: #fef5e7;
         }
 
         .document-item.selected {
-            background: #e6f3ff;
-            border-color: #4facfe;
+            background: #fdebd0;
+            border-color: #f39c12;
         }
 
         .chat-messages {
@@ -154,7 +156,7 @@
         }
 
         .message.user {
-            background: #4facfe;
+            background: #3498db;
             color: white;
             margin-left: auto;
         }
@@ -179,13 +181,14 @@
         }
 
         .send-btn {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
             color: white;
             border: none;
             padding: 12px 20px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 1em;
+            font-weight: 600;
         }
 
         .status {
@@ -212,6 +215,65 @@
             pointer-events: none;
         }
 
+        .study-mode-selector {
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .mode-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #ecf0f1;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+            font-size: 0.95em;
+        }
+
+        .mode-btn:hover {
+            border-color: #f39c12;
+            background: #fef5e7;
+            transform: translateX(5px);
+        }
+
+        .mode-btn.active {
+            border-color: #f39c12;
+            background: #fdebd0;
+            font-weight: 600;
+        }
+
+        .mode-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+
+        .stats-panel {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.9em;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -227,20 +289,46 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎓 Interactive AI Tutor</h1>
-            <p>Upload your documents and chat with an AI that understands your content</p>
+            <h1>👨‍🏫 Pocket Professor</h1>
+            <p>Your AI study companion for exam prep, homework help, and concept mastery</p>
         </div>
 
         <div class="main-content">
             <div class="upload-section">
-                <h2 class="section-title">📄 Document Upload</h2>
+                <div class="stats-panel">
+                    <h3 style="margin: 0 0 10px 0; font-size: 1.1em;">📊 Study Stats</h3>
+                    <div class="stat-item">
+                        <span>Materials:</span>
+                        <span class="stat-value" id="materialCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Questions Asked:</span>
+                        <span class="stat-value" id="questionCount">0</span>
+                    </div>
+                </div>
+
+                <div class="study-mode-selector">
+                    <h3 style="margin: 0 0 10px 0; color: #555; font-size: 1em;">🎯 Study Mode</h3>
+                    <button class="mode-btn active" onclick="setStudyMode('general')" id="mode-general">
+                        <span class="mode-icon">💬</span> General Q&A
+                    </button>
+                    <button class="mode-btn" onclick="setStudyMode('exam')" id="mode-exam">
+                        <span class="mode-icon">📝</span> Exam Prep
+                    </button>
+                    <button class="mode-btn" onclick="setStudyMode('homework')" id="mode-homework">
+                        <span class="mode-icon">✏️</span> Homework Help
+                    </button>
+                    <button class="mode-btn" onclick="setStudyMode('concept')" id="mode-concept">
+                        <span class="mode-icon">🧠</span> Concept Review
+                    </button>
+                </div>
                 
                 <div class="upload-area" id="uploadArea">
                     <div>
-                        <p style="font-size: 1.2em; margin-bottom: 10px;">📁 Drop your files here</p>
-                        <p style="color: #666; margin-bottom: 15px;">PDFs, Images (JPG, PNG, etc.) or click to browse</p>
+                        <p style="font-size: 1em; margin-bottom: 10px; font-weight: 600;">📚 Add Course Materials</p>
+                        <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Textbooks, slides, notes, diagrams</p>
                         <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                            Choose File
+                            Upload Material
                         </button>
                     </div>
                 </div>
@@ -250,27 +338,33 @@
                 <div id="uploadStatus"></div>
 
                 <div class="documents-list">
-                    <h3 style="margin-bottom: 10px; color: #555;">📚 Available Documents</h3>
+                    <h3 style="margin-bottom: 10px; color: #555; font-size: 0.95em;">📖 Course Materials</h3>
                     <div id="documentsList">
-                        <p style="color: #999; font-style: italic;">No documents uploaded yet</p>
+                        <p style="color: #999; font-style: italic; font-size: 0.9em;">No materials uploaded yet</p>
                     </div>
                 </div>
             </div>
 
             <div class="chat-section">
-                <h2 class="section-title">💬 Chat with AI</h2>
+                <h2 class="section-title">💬 Ask Your Professor</h2>
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="message ai">
-                        <strong>AI Tutor:</strong> Hello! Upload documents or images and I'll help you understand their content. I can search across ALL your uploaded materials to answer your questions.
+                        <strong>Professor:</strong> Welcome! I'm your Pocket Professor. Upload your course materials (textbooks, lecture slides, notes, diagrams) and I'll help you:
+                        <br><br>
+                        📝 <strong>Prepare for exams</strong> - Practice questions, key concepts, study guides<br>
+                        ✏️ <strong>Complete homework</strong> - Step-by-step guidance without giving away answers<br>
+                        🧠 <strong>Master concepts</strong> - Clear explanations adapted to your learning style<br>
+                        <br>
+                        I'll analyze your materials and teach using the same style and conventions as your course. Let's get started!
                     </div>
                 </div>
 
                 <div class="chat-input-area">
                     <input type="text" id="chatInput" class="chat-input" 
-                           placeholder="Ask a question about any of your uploaded materials..." 
+                           placeholder="Ask about concepts, practice problems, or exam topics..." 
                            onkeypress="handleKeyPress(event)">
-                    <button class="send-btn" onclick="sendMessage()">Send</button>
+                    <button class="send-btn" onclick="sendMessage()">Ask</button>
                 </div>
             </div>
         </div>
@@ -278,12 +372,49 @@
 
     <script>
         const API_BASE = 'http://127.0.0.1:8000';
+        let currentStudyMode = 'general';
+        let questionCount = 0;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             loadDocuments();
             setupFileUpload();
+            updateStats();
         });
+
+        // Study mode management
+        function setStudyMode(mode) {
+            currentStudyMode = mode;
+            
+            // Update UI
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`mode-${mode}`).classList.add('active');
+            
+            // Update placeholder
+            const input = document.getElementById('chatInput');
+            const placeholders = {
+                'general': 'Ask about concepts, practice problems, or exam topics...',
+                'exam': 'What topics should I focus on? Can you create practice questions?',
+                'homework': 'I need help understanding this problem...',
+                'concept': 'Can you explain this concept in detail?'
+            };
+            input.placeholder = placeholders[mode];
+            
+            // Add mode change message
+            const modeNames = {
+                'general': 'General Q&A',
+                'exam': 'Exam Prep',
+                'homework': 'Homework Help',
+                'concept': 'Concept Review'
+            };
+            addMessage('system', `📚 Switched to ${modeNames[mode]} mode`);
+        }
+
+        function updateStats() {
+            document.getElementById('questionCount').textContent = questionCount;
+        }
 
         // File upload setup
         function setupFileUpload() {
@@ -351,10 +482,11 @@
                     const chunks = result.processing_result.num_chunks;
                     const fileType = result.file_type || 'document';
                     const successMsg = fileType === 'image' 
-                        ? `✅ Image uploaded and analyzed successfully!`
-                        : `✅ Document uploaded and processed successfully! (${chunks} chunks created)`;
+                        ? `✅ Course material (image) added to your study library!`
+                        : `✅ Course material processed! Ready for studying (${chunks} sections indexed)`;
                     showStatus(successMsg, 'success');
                     loadDocuments();
+                    addMessage('system', `📚 New material added: ${file.name}`);
                 } else {
                     showStatus(`❌ Upload failed: ${result.error}`, 'error');
                 }
@@ -373,10 +505,12 @@
                 
                 if (result.documents && result.documents.length > 0) {
                     documentsList.innerHTML = result.documents.map(doc => 
-                        `<div class="document-item">${doc}</div>`
+                        `<div class="document-item">📄 ${doc}</div>`
                     ).join('');
+                    document.getElementById('materialCount').textContent = result.documents.length;
                 } else {
-                    documentsList.innerHTML = '<p style="color: #999; font-style: italic;">No documents uploaded yet</p>';
+                    documentsList.innerHTML = '<p style="color: #999; font-style: italic; font-size: 0.9em;">No materials uploaded yet</p>';
+                    document.getElementById('materialCount').textContent = '0';
                 }
             } catch (error) {
                 console.error('Failed to load documents:', error);
@@ -398,18 +532,38 @@
             // Add user message
             addMessage('user', message);
             input.value = '';
+            
+            // Increment question count
+            questionCount++;
+            updateStats();
 
-            // Show loading
-            const loadingMsg = addMessage('ai', '🤔 Searching across all documents...');
+            // Show loading with mode-specific message
+            const loadingMessages = {
+                'general': '🤔 Searching through your course materials...',
+                'exam': '📝 Analyzing exam-relevant content...',
+                'homework': '✏️ Finding relevant examples and explanations...',
+                'concept': '🧠 Gathering comprehensive concept information...'
+            };
+            const loadingMsg = addMessage('ai', loadingMessages[currentStudyMode]);
 
             try {
+                // Enhance message with study mode context
+                let enhancedMessage = message;
+                if (currentStudyMode === 'exam') {
+                    enhancedMessage = `[Exam Preparation Mode] ${message}. Please provide exam-focused guidance with key concepts and practice questions.`;
+                } else if (currentStudyMode === 'homework') {
+                    enhancedMessage = `[Homework Help Mode] ${message}. Guide me through the problem-solving process without giving direct answers.`;
+                } else if (currentStudyMode === 'concept') {
+                    enhancedMessage = `[Concept Review Mode] ${message}. Provide a comprehensive explanation with examples from the course materials.`;
+                }
+
                 const response = await fetch(`${API_BASE}/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        message: message,
+                        message: enhancedMessage,
                         use_rag: true
                     })
                 });
@@ -439,14 +593,15 @@
             if (type === 'user') {
                 messageDiv.innerHTML = `<strong>You:</strong> ${content}`;
             } else if (type === 'ai') {
-                messageDiv.innerHTML = `<strong>AI Tutor:</strong> ${content}`;
+                messageDiv.innerHTML = `<strong>Professor:</strong> ${content}`;
             } else {
                 messageDiv.innerHTML = content;
-                messageDiv.style.background = '#fff3cd';
-                messageDiv.style.color = '#856404';
-                messageDiv.style.border = '1px solid #ffeaa7';
+                messageDiv.style.background = '#fef5e7';
+                messageDiv.style.color = '#7d6608';
+                messageDiv.style.border = '1px solid #f39c12';
                 messageDiv.style.textAlign = 'center';
                 messageDiv.style.margin = '10px auto';
+                messageDiv.style.fontSize = '0.9em';
             }
             
             chatMessages.appendChild(messageDiv);
