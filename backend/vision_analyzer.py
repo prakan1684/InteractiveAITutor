@@ -151,8 +151,135 @@ Be precise and comprehensive - students will use this analysis for studying."""
         else:
             return f"Error analyzing image: {result['error']}"
 
-    
+    def detect_problem_type_and_context(self, image_path:str) -> Dict:
+        """
+        Automatically detect the problem type and context from the image
 
+        args:
+            image_path (str): Path to the image file.
+
+        returns:
+            Dict: Dictionary containing the problem type and context.
+        """    
+        try:
+            #create file for vision
+            file_id= self.create_file_for_vision(image_path)
+            if not file_id: 
+                return {
+                    "success": False,
+                    "error": "Failed to create file for vision",
+                    "problem_type": None,
+                    "context": None,
+                }
+
+            #specialized prompt for detecting the problem type and context
+            prompt = """Analyze this student's whiteboard/canvas work and identify:
+
+1. **Problem Type**: Classify as ONE of these:
+   - "math" - if it contains mathematical equations, calculus, algebra, geometry, etc.
+   - "physics" - if it contains physics formulas, force diagrams, motion equations, etc.
+   - "chemistry" - if it contains chemical formulas, reactions, molecular structures, etc.
+   - "diagram" - if it's primarily a concept map, flowchart, or visual diagram
+   - "general" - if it's notes, text, or unclear
+
+2. **Context**: In ONE concise sentence, describe what specific problem or concept they're working on.
+   Examples:
+   - "Solving the integral of x squared"
+   - "Drawing free body diagram for inclined plane"
+   - "Balancing chemical equation for combustion"
+   - "Creating concept map for cell biology"
+
+3. **Confidence**: How clear is the content? (high/medium/low)
+
+Respond in EXACTLY this format (nothing else):
+PROBLEM_TYPE: [type]
+CONTEXT: [one sentence]
+CONFIDENCE: [level]
+
+Be concise and precise."""
+
+#call gpt4.1 mini api
+            response = self.client.responses.create(
+                model = self.model_name,
+                input = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "file_id": file_id,
+                        },
+                    ],
+                }]
+            )
+
+            analysis = response.output_text
+            #clean up file
+
+            try:
+                self.client.files.delete(file_id)
+            except Exception as e:
+                pass
+
+            result = self._parse_detection_response(analysis)
+            result['success'] = True
+            print(f"Detected: {result['problem_type']} - {result['context']}")
+            return result
+
+        except Exception as e:
+            print(f"Error detecting problem type and context: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "problem_type": None,
+                "context": None,
+            }
+    def _parse_detection_response(self, response: str) -> Dict:
+        """
+        Parses the detection response and returns a dictionary containing the problem type and context
+        
+        Args:
+            response (str): Detection response
+
+        Returns:
+            Dict: Dictionary containing the problem type and context
+        """
+
+        try: 
+            lines= response.strip().split("\n")
+            result={
+                "problem_type": "general",
+                "context": None,
+                "confidence": "medium",
+            }
+
+
+            for line in lines:
+                line = line.strip()
+                if line.startswith("PROBLEM_TYPE:"):
+                    problem_type = line.split(":", 1)[1].strip().lower()
+                    if problem_type in ["math", "physics", "chemistry", "diagram"]:
+                        result["problem_type"] = problem_type
+                    else:
+                        result["problem_type"] = "general"
+                elif line.startswith("CONTEXT:"):
+                    context = line.split(":", 1)[1].strip()
+                    result["context"] = context if context else None
+                elif line.startswith("CONFIDENCE:"):
+                    confidence = line.split(":", 1)[1].strip().lower()
+                    if confidence in ["high", "medium", "low"]:
+                        result["confidence"] = confidence
+            
+            return result
+        except Exception as e:
+            print(f"Error parsing detection response: {e}")
+            return {
+                "problem_type": None,
+                "context": None,
+                "confidence": None,
+            }
+            
+            
 
 
 
