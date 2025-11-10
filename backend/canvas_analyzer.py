@@ -31,22 +31,26 @@ class CanvasAnalyzer:
 
     def analyze_student_work(
         self,
-        image_path: str,
-        context: Optional[str] = None,
-        problem_type: str = "general"
+        image_path: str
     ) -> Dict:
         """
         Analyzes the canvas and extracts relevant information
 
         Args:
             image_path (str): Path to the image
-            context (Optional[str]): Context for the problem
-            problem_type (str): Type of the problem
 
         Returns:
             Dict: Dictionary containing the analysis results
         """
         try:
+
+            detection=self.vision_analyzer.detect_problem_type_and_context(image_path)
+            if detection["success"]:
+                problem_type = detection["problem_type"]
+                context = detection["context"]
+            else:
+                problem_type = "general"
+                context = ""
             #Build the specialized prompt based on problem type
             prompt= self._build_canvas_prompt(context, problem_type)
 

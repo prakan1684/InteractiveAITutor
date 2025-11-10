@@ -11,10 +11,13 @@ Entry point for the FastAPI application.
 
 
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ai_service import chat_with_ai
+from canvas_analyzer import CanvasAnalyzer
+from typing import Dict, Optional
+import uuid
 import os
 from pathlib import Path
 
@@ -207,3 +210,59 @@ async def upload_document(file: UploadFile=File(...)):
             "error": str(e),
             "status": "error"
         }
+
+app.post("/analyze-canvas")
+async def analyze_canvas(
+    image: UploadFile = File(...),
+):
+    """
+    Analyze a students canvas drawing and provide real-time feedback
+
+    Automatically detects problem type and context
+    Args:
+        image (UploadFile): The image to analyze
+        context (Optional[str]): The context of the problem
+        problem_type (Optional[str]): The type of the problem
+        auto_detect (bool): Whether to automatically detect problem type and context
+
+    Returns:
+        Dict: The analysis results
+    """
+
+
+    try:
+        #create a dir for canvas uploads
+
+        canvas_dir = Path("canvas_uploads")
+        canvas_dir.mkdir(exist_ok=True)
+
+        #save uploaded file to canvas dir
+        file_extention = Path(image.filename).suffix
+        unique_filename = f"canvas_{uuid.uuid4()}"
+        file_path = canvas_dir / (unique_filename)
+
+
+        #open file
+        with open(file_path, "wb") as buffer:
+            content = await image.read()
+            buffer.write(content)
+        
+
+        print(f"Canvas image saved to {file_path}")
+
+        #analyze canvas with automatic detection
+        analyzer = CanvasAnalyzer()
+        result = analyzer.analyze_student_work(
+            image_path=str(file_path),
+        )
+        #remove the uplaoded file
+        file_path.unlink()
+
+        return result
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+        
