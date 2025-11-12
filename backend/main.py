@@ -211,7 +211,7 @@ async def upload_document(file: UploadFile=File(...)):
             "status": "error"
         }
 
-app.post("/analyze-canvas")
+@app.post("/analyze-canvas")
 async def analyze_canvas(
     image: UploadFile = File(...),
 ):
@@ -238,7 +238,7 @@ async def analyze_canvas(
 
         #save uploaded file to canvas dir
         file_extention = Path(image.filename).suffix
-        unique_filename = f"canvas_{uuid.uuid4()}"
+        unique_filename = f"canvas_{uuid.uuid4()}{file_extention}"
         file_path = canvas_dir / (unique_filename)
 
 

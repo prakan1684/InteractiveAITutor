@@ -15,10 +15,10 @@ def test_vision_analyzer():
     try:
         analyzer = VisionAnalyzer()
         
-        test_image = "dog.jpeg"
+        test_image = "Fig09.jpg"
         print(f"Testing image analysis with image: {test_image}")
 
-        result = analyzer.analyze_image(test_image, user_query="What breed of dog is this?")
+        result = analyzer.analyze_image(test_image, user_query="What is the user solving?")
         if result["success"]:
             print("Image analysis generated successfully.")
             print(f"Analysis: {result['analysis']}")

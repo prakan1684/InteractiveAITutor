@@ -22,6 +22,7 @@ vector_db/
 # Uploaded files (optional - you might want to keep examples)
 backend/uploads/
 backend/processed/
+backend/canvas_uploads/
 
 # IDE
 .vscode/

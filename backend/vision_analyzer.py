@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 from typing import Optional, Dict
 from dotenv import load_dotenv
+from prompts.canvas_prompts import get_vision_prompt, DETECTION_PROMPT
 import base64
 
 
@@ -18,7 +19,7 @@ class VisionAnalyzer:
     """
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model_name = "gpt-4.1-mini"
+        self.model_name = "gpt-5-mini"
 
     
 
@@ -66,30 +67,7 @@ class VisionAnalyzer:
             if not file_id:
                 return {"error": "Failed to create file for vision", "analysis": None}
             
-
-            if user_query:
-                prompt = f"""As an educational AI tutor, analyze this image and specifically answer: {user_query}
-
-Additionally, provide:
-1. **Content Summary**: What educational content is shown?
-2. **Key Details**: Extract any text, numbers, or important visual elements
-3. **Educational Context**: How does this relate to learning objectives?
-4. **Concepts Covered**: What topics or subjects does this image address?
-
-Be thorough and educational - this will help students understand the material."""
-            else:
-                prompt = """As an educational AI tutor, provide a comprehensive analysis of this educational image:
-
-1. **Content Type**: What type of educational material is this? (diagram, graph, photo, whiteboard, etc.)
-2. **Text Extraction**: Transcribe any visible text, equations, labels, or annotations
-3. **Visual Elements**: Describe charts, graphs, diagrams, illustrations in detail
-4. **Data & Values**: Include any numerical data, measurements, or specific values shown
-5. **Key Concepts**: What educational concepts, topics, or subjects are presented?
-6. **Learning Objectives**: What would a student learn from this image?
-7. **Context Clues**: Any additional details that provide educational context
-
-Be precise and comprehensive - students will use this analysis for studying."""
-
+            prompt = get_vision_prompt(user_query)
             #call gpt4.1 mini api
             response = self.client.responses.create(
                 model = self.model_name,
@@ -102,7 +80,9 @@ Be precise and comprehensive - students will use this analysis for studying."""
                             "file_id": file_id,
                         },
                     ],
-                }]
+                }],
+                reasoning = {"effort": "minimal"},
+                text= {"verbosity":"medium"}
             )
 
             analysis = response.output_text
@@ -173,32 +153,9 @@ Be precise and comprehensive - students will use this analysis for studying."""
                 }
 
             #specialized prompt for detecting the problem type and context
-            prompt = """Analyze this student's whiteboard/canvas work and identify:
+            prompt = DETECTION_PROMPT
 
-1. **Problem Type**: Classify as ONE of these:
-   - "math" - if it contains mathematical equations, calculus, algebra, geometry, etc.
-   - "physics" - if it contains physics formulas, force diagrams, motion equations, etc.
-   - "chemistry" - if it contains chemical formulas, reactions, molecular structures, etc.
-   - "diagram" - if it's primarily a concept map, flowchart, or visual diagram
-   - "general" - if it's notes, text, or unclear
-
-2. **Context**: In ONE concise sentence, describe what specific problem or concept they're working on.
-   Examples:
-   - "Solving the integral of x squared"
-   - "Drawing free body diagram for inclined plane"
-   - "Balancing chemical equation for combustion"
-   - "Creating concept map for cell biology"
-
-3. **Confidence**: How clear is the content? (high/medium/low)
-
-Respond in EXACTLY this format (nothing else):
-PROBLEM_TYPE: [type]
-CONTEXT: [one sentence]
-CONFIDENCE: [level]
-
-Be concise and precise."""
-
-#call gpt4.1 mini api
+            #call gpt4.1 mini api
             response = self.client.responses.create(
                 model = self.model_name,
                 input = [{
@@ -210,7 +167,9 @@ Be concise and precise."""
                             "file_id": file_id,
                         },
                     ],
-                }]
+                }],
+                reasoning = {"effort": "minimal"},
+                text = {"verbosity": "medium"}
             )
 
             analysis = response.output_text
