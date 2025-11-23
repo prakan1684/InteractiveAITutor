@@ -19,7 +19,7 @@ class VisionAnalyzer:
     """
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model_name = "gpt-5-mini"
+        self.model_name = "gpt-4.1-mini"
 
     
 
@@ -81,7 +81,7 @@ class VisionAnalyzer:
                         },
                     ],
                 }],
-                reasoning = {"effort": "minimal"},
+                #reasoning = {"effort": "minimal"},
                 text= {"verbosity":"medium"}
             )
 
@@ -168,7 +168,7 @@ class VisionAnalyzer:
                         },
                     ],
                 }],
-                reasoning = {"effort": "minimal"},
+                #reasoning = {"effort": "minimal"},
                 text = {"verbosity": "medium"}
             )
 

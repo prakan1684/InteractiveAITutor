@@ -12,6 +12,7 @@ from prompts.canvas_prompts import get_canvas_prompt
 import os
 import json
 import uuid
+import re
 
 
 
@@ -69,13 +70,17 @@ class CanvasAnalyzer:
 
             return {
                 "status": "success",
-                "message": "Student work analyzed successfully",
-                "feedback": feedback,
-                "analysis": analysis_result["analysis"],
-                "image_path": image_path,
-                "context": context,
                 "problem_type": problem_type,
-                "timestamp": datetime.now().isoformat()
+                "context": context,
+                "feedback": {
+                    "problem": feedback.get("problem", ""),
+                    "analysis": feedback.get("analysis", ""),
+                    "hints": feedback.get("hints", ""),
+                    "mistakes": feedback.get("mistakes", ""),
+                    "next_step": feedback.get("next_step", ""),
+                    "encouragement": feedback.get("encouragement", "")
+                }
+                
             }
         except Exception as e:
             return {
@@ -113,11 +118,41 @@ class CanvasAnalyzer:
         For now it only returns simple text analysis, we will do annotations later:)
         """
 
+        sections = {
+            "PROBLEM": "",
+            "ANALYSIS": "",
+            "HINTS": "",
+            "NEXT_STEP": "",
+            "MISTAKES": "",
+            "ENCOURAGEMENT": ""
+        }
+
+        pattern = r"(PROBLEM|ANALYSIS|HINTS|NEXT_STEP|MISTAKES|ENCOURAGEMENT):\s*([\s\S]*?)(?=\n[A-Z_]+:|$)" 
+        matches = re.findall(pattern, analysis)
+
+        for section, content in matches:
+            sections[section] = content.strip()
+
+        hint_lines = [
+            h.strip("-• ").strip()
+            for h in sections["HINTS"].split("\n")
+            if h.strip()
+        ]
+        mistake_lines = [
+            m.strip("-• ").strip()
+            for m in sections["MISTAKES"].split("\n")
+            if m.strip()
+        ]
+
         return {
-            "overall_feedback" : analysis,
+            "status": "success",
             "problem_type": problem_type,
-            "feedback_type": "text",
-            "encouragement": self._extract_encouragement(analysis),
+            "problem": sections["PROBLEM"],
+            "analysis": sections["ANALYSIS"],
+            "hints": hint_lines,
+            "next_step": sections["NEXT_STEP"],
+            "mistakes": mistake_lines,
+            "encouragement": sections["ENCOURAGEMENT"]
         }
 
     def _extract_encouragement(self, analysis: str) -> str:

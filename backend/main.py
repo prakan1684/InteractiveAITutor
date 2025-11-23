@@ -255,6 +255,16 @@ async def analyze_canvas(
         result = analyzer.analyze_student_work(
             image_path=str(file_path),
         )
+
+
+        f = result["feedback"]
+        print("PROBLEM:", f["problem"])
+        print("ANALYSIS:", f["analysis"])
+        print("HINTS:", f["hints"])
+        print("NEXT STEP:", f["next_step"])
+        print("MISTAKES:", f["mistakes"])
+        print("ENCOURAGEMENT:", f["encouragement"])
+
         #remove the uplaoded file
         file_path.unlink()
 
