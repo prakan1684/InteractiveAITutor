@@ -4,6 +4,7 @@ from typing import Optional, Dict
 from dotenv import load_dotenv
 from prompts.canvas_prompts import get_vision_prompt, DETECTION_PROMPT
 import base64
+import json
 
 
 
@@ -240,13 +241,130 @@ class VisionAnalyzer:
             
             
 
+    def annotate_image(self, image_path:str, prompt:str) -> Dict:        
+        try:
+            file_id = self.create_file_for_vision(image_path)
+            if not file_id:
+                return {
+                    "success": False,
+                    "error": "Failed to create file for vision",
+                }
+            
+            #call gpt4.1 mini api
+            response = self.client.responses.create(
+                model=self.model_name,
+                input=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "file_id": file_id,
+                            "detail": "high",
+                        },
+                    ],
+                }],
+                text={"verbosity": "medium"}
+            )
+            raw = response.output_text
+            try:
+                data= json.loads(raw)
+            except Exception as e:
+                return {"success": False, "error": "invalid JSON response", "raw": raw}
+            
+            #basic validation/clamping for different shapes
+            annoations = []
+            for ann in data.get("annotations", []):
+                t = ann.get("type")
+                if t not in {"circle", "rect", "arrow", "text"}:
+                    continue
+                def clamp01(v): return max(0.0, min(1,0, float(v)))
+                if t == "circle":
+                    c == ann.get("center", {})
+                    radius = float(ann.get("radius", 0))
+                    if radius <=0 or radius > 1:
+                        continue
+                    annoations.append({
+                        "type": "circle",
+                        "center": {
+                            "x": clamp01(c.get("x", 0)),
+                            "y": clamp01(c.get("y", 0)),
+                        },
+                        "radius": radius,
+                        "colorHex": ann.get("colorHex", "#FF0000"),
+                        "lineWidth": int(ann.get("lineWidth", 3)),
+                    })
+                elif t == "rect":
+                    tl = ann.get("topLeft", {})
+                    w = float(ann.get("width", 0))
+                    h = float(ann.get("height", 0))
+                    if w <= 0 or h <= 0 or w > 1 or h > 1:
+                        continue
+                    annoations.append({
+                        "type": "rect",
+                        "topLeft": {
+                            "x": clamp01(tl.get("x", 0)),
+                            "y": clamp01(tl.get("y", 0)),
+                        },
+                        "width": w,
+                        "height": h,
+                        "colorHex": ann.get("colorHex", "#FF0000"),
+                        "lineWidth": int(ann.get("lineWidth", 3)),
+                    })
+                elif t == arrow:
+                    frm = ann.get("from", {})
+                    to = ann.get("to", {})
+                    annotations.append({
+                        "type": "arrow",
+                        "from": {
+                            "x": clamp01(frm.get("x", 0)),
+                            "y": clamp01(frm.get("y", 0)),
+                        },
+                        "to": {
+                            "x": clamp01(to.get("x", 0)),
+                            "y": clamp01(to.get("y", 0)),
+                        },
+                        "colorHex": ann.get("colorHex", "#FF0000"),
+                        "lineWidth": int(ann.get("lineWidth", 3)),
+                    })
+                elif t == "text":
+                    pos = ann.get("position", {})
+                    annotations.append({
+                        "type": "text",
+                        "position": {
+                            "x": clamp01(pos.get("x", 0)),
+                            "y": clamp01(pos.get("y", 0)),
+                        },
+                        "text": ann.get("text", ""),
+                        "colorHex": ann.get("colorHex", "#000000"),
+                        "fontSize": int(ann.get("fontSize", 16)),
+                    })
+            metadata = data.get("metadata", {})
+            if not metadata.get("annotations", []):
+                metadata = {
+                    "problem_type":None,
+                    "context":None,
+                    "confidence":None,
+                }
 
+                return {
+                    "success": True,
+                    "annotations": annotations,
+                    "metadata": metadata,
+                    "raw": raw,
+                    "model": self.model_name,
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "raw": raw,
+                "model": self.model_name,
+            }
 
+                
+                    
 
-
-
-
-        
 
     
 

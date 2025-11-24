@@ -252,23 +252,30 @@ async def analyze_canvas(
 
         #analyze canvas with automatic detection
         analyzer = CanvasAnalyzer()
-        result = analyzer.analyze_student_work(
-            image_path=str(file_path),
-        )
 
 
-        f = result["feedback"]
-        print("PROBLEM:", f["problem"])
-        print("ANALYSIS:", f["analysis"])
-        print("HINTS:", f["hints"])
-        print("NEXT STEP:", f["next_step"])
-        print("MISTAKES:", f["mistakes"])
-        print("ENCOURAGEMENT:", f["encouragement"])
+        analysis_result = analyzer.analyze_student_work(str(file_path))
+        annotations_result = analyzer.annotate_student_work(str(file_path))
+
 
         #remove the uplaoded file
         file_path.unlink()
 
-        return result
+        return {
+            # analysis
+            "status": analysis_result.get("status", "error"),
+            "feedback": analysis_result.get("feedback"),
+            "context": analysis_result.get("context"),
+            "problem_type": analysis_result.get("problem_type"),
+            # annotations
+            "annotations": annotations_result.get("annotations", [])
+                if annotations_result.get("status") == "success" else [],
+            "annotation_metadata": annotations_result.get("metadata", {})
+                if annotations_result.get("status") == "success" else {},
+            "annotation_status": annotations_result.get("status"),
+            "annotation_error": annotations_result.get("error")
+                if annotations_result.get("status") != "success" else None,
+        }
     except Exception as e:
         return {
             "error": str(e),

@@ -8,7 +8,7 @@ This module is responsible for analyzing the canvas and extracting relevant info
 from typing import List, Dict, Optional
 from vision_analyzer import VisionAnalyzer
 from datetime import datetime
-from prompts.canvas_prompts import get_canvas_prompt
+from prompts.canvas_prompts import get_canvas_prompt, ANNOTATION_PROMPT
 import os
 import json
 import uuid
@@ -169,6 +169,49 @@ class CanvasAnalyzer:
             return "Excellent work! Keep it up! 🌟"
         else:
             return "You're making progress! Let's refine this together. 💪"
+    
+    def annotate_student_work(self, image_path: str) -> Dict:
+        """
+        Annotates the student's work
+
+        Args:
+            image_path (str): Path to the image
+
+        Returns:
+            Dict: Dictionary containing the annotations
+        """
+        try:
+            detection = self.vision_analyzer.detect_problem_type_and_context(image_path)
+            if detection["success"]:
+                problem_type = detection["problem_type"] or ""
+                context = detection["context"] or ""
+            else:
+                problem_type = "general"
+                context = ""
+            prompt= f"Context: {context}\nProblem Type: {problem_type}\n\n{ANNOTATION_PROMPT}"
+            result = self.vision_analyzer.annotate_image(image_path, prompt)
+            if not result["success"]:
+                return {
+                    "status": "error",
+                    "message": "Failed to annotate student work",
+                    "error": result["error"]
+                }
+            return {
+                "status": "success",
+                'annotations': result.get("annotations", []),
+                'metadata': {
+                    "problem_type": problem_type,
+                    "context": context,
+                    "confidence": detection.get("confidence"),
+                    **(result.get("metadata") or {}),
+                }
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": "Failed to annotate student work",
+                "error": str(e)
+            }
 
 
 
