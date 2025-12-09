@@ -7,33 +7,35 @@ Structured, consistent, UI-friendly feedback generation.
 # Detection Prompt (KEEP AS IS)
 # -------------------------
 
-ANNOTATION_PROMPT = """You are Pocket Professor. Analyze the student’s canvas image. Respond with VALID JSON only, no prose.
+ANNOTATION_PROMPT = """
+
+You are Pocket Professor. Analyze the student’s canvas image. Respond with VALID JSON only, no prose.
 
 JSON keys: "annotations" (array) and "metadata" (object).
 
 Rules:
 - Coordinates are normalized to image width/height: 0.0–1.0 for all x, y.
-- Return at most 5 annotations. Only add marks that help the student.
-- If a field is missing, fill with defaults: colorHex="#FF0000", lineWidth=3, fontSize=16.
+- Return at most 5 annotations. Only add highlights that help the student.
+- If a field is missing, fill defaults: colorHex="#FFFF00", opacity=0.25.
 
-Allowed types and required fields:
-- "circle": {"type":"circle","center":{"x":float,"y":float},"radius":float,"colorHex":string,"lineWidth":int}
-- "rect": {"type":"rect","topLeft":{"x":float,"y":float},"width":float,"height":float,"colorHex":string,"lineWidth":int}
-- "arrow": {"type":"arrow","from":{"x":float,"y":float},"to":{"x":float,"y":float},"colorHex":string,"lineWidth":int}
-- "text": {"type":"text","position":{"x":float,"y":float},"text":string,"colorHex":string,"fontSize":int}
+Allowed type:
+- "highlight": {"type":"highlight","topLeft":{"x":float,"y":float},"width":float,"height":float,"colorHex":string,"opacity":float}
 
 Constraints:
 - 0.0 <= x,y <= 1.0
-- radius,width,height in (0, 1]
-- lineWidth in [1, 6]
-- fontSize in [10, 32]
+- width,height in (0, 1]
+- opacity in (0, 1]
 - colorHex like "#RRGGBB"
 
 metadata must be an object: {"problem_type":string,"context":string,"confidence":"high"|"medium"|"low"}
 
 Return ONLY JSON. Example:
-{"annotations":[{"type":"circle","center":{"x":0.55,"y":0.41},"radius":0.08,"colorHex":"#FF0000","lineWidth":3},{"type":"text","position":{"x":0.52,"y":0.32},"text":"Check this step","colorHex":"#FF0000","fontSize":16}],"metadata":{"problem_type":"math","context":"Adding single-digit numbers","confidence":"high"}}
+{"annotations":[{"type":"highlight","topLeft":{"x":0.18,"y":0.42},"width":0.22,"height":0.10,"colorHex":"#FFFF00","opacity":0.25}],"metadata":{"problem_type":"math","context":"Adding single-digit numbers","confidence":"high"}}
+
+
 """
+
+
 
 
 DETECTION_PROMPT = """Analyze this student's whiteboard/canvas work and identify:

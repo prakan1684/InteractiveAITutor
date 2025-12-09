@@ -273,72 +273,47 @@ class VisionAnalyzer:
                 return {"success": False, "error": "invalid JSON response", "raw": raw}
             
             #basic validation/clamping for different shapes
-            annoations = []
+
+            def clamp01(v: float) -> float:
+                try:
+                    return max(0.0, min(1.0, float(v)))
+                except Exception:
+                    return 0.0
+            
+            annotations = []
+
             for ann in data.get("annotations", []):
-                t = ann.get("type")
-                if t not in {"circle", "rect", "arrow", "text"}:
+                if ann.get("type") != "highlight":
                     continue
-                def clamp01(v): return max(0.0, min(1,0, float(v)))
-                if t == "circle":
-                    c == ann.get("center", {})
-                    radius = float(ann.get("radius", 0))
-                    if radius <=0 or radius > 1:
-                        continue
-                    annoations.append({
-                        "type": "circle",
-                        "center": {
-                            "x": clamp01(c.get("x", 0)),
-                            "y": clamp01(c.get("y", 0)),
-                        },
-                        "radius": radius,
-                        "colorHex": ann.get("colorHex", "#FF0000"),
-                        "lineWidth": int(ann.get("lineWidth", 3)),
-                    })
-                elif t == "rect":
-                    tl = ann.get("topLeft", {})
-                    w = float(ann.get("width", 0))
-                    h = float(ann.get("height", 0))
-                    if w <= 0 or h <= 0 or w > 1 or h > 1:
-                        continue
-                    annoations.append({
-                        "type": "rect",
-                        "topLeft": {
-                            "x": clamp01(tl.get("x", 0)),
-                            "y": clamp01(tl.get("y", 0)),
-                        },
-                        "width": w,
-                        "height": h,
-                        "colorHex": ann.get("colorHex", "#FF0000"),
-                        "lineWidth": int(ann.get("lineWidth", 3)),
-                    })
-                elif t == arrow:
-                    frm = ann.get("from", {})
-                    to = ann.get("to", {})
-                    annotations.append({
-                        "type": "arrow",
-                        "from": {
-                            "x": clamp01(frm.get("x", 0)),
-                            "y": clamp01(frm.get("y", 0)),
-                        },
-                        "to": {
-                            "x": clamp01(to.get("x", 0)),
-                            "y": clamp01(to.get("y", 0)),
-                        },
-                        "colorHex": ann.get("colorHex", "#FF0000"),
-                        "lineWidth": int(ann.get("lineWidth", 3)),
-                    })
-                elif t == "text":
-                    pos = ann.get("position", {})
-                    annotations.append({
-                        "type": "text",
-                        "position": {
-                            "x": clamp01(pos.get("x", 0)),
-                            "y": clamp01(pos.get("y", 0)),
-                        },
-                        "text": ann.get("text", ""),
-                        "colorHex": ann.get("colorHex", "#000000"),
-                        "fontSize": int(ann.get("fontSize", 16)),
-                    })
+                
+                tl = ann.get("topLeft", {}) or {}
+                w = ann.get("width", 0.0)
+                h = ann.get("height", 0.0)
+                if w is None or h is None:
+                    continue
+
+                try:
+                    w = float(w)
+                    h = float(h)
+                except ValueError:
+                    continue
+
+                if w <= 0 or w>1 or h<=0 or h>1:
+                    continue
+                
+                annotations.append({
+                    "type": "highlight",
+                    "top_left": {
+                        "x": clamp01(tl.get("x", 0.0)),
+                        "y": clamp01(tl.get("y", 0.0)),
+                    },
+                    "width": w,
+                    "height": h,
+                    "colorHex": ann.get("colorHex", "#FFFF00"),
+                    "opacity": max(0.0, min(1.0, float(ann.get("opacity", 0.25)))),
+                })
+            
+
             metadata = data.get("metadata", {})
             if not metadata.get("annotations", []):
                 metadata = {
