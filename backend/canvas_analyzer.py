@@ -13,8 +13,11 @@ import os
 import json
 import uuid
 import re
+from logging_config import setup_logging
+setup_logging(level="INFO")
 
-
+from logger import get_logger
+logger = get_logger(__name__)
 
 class CanvasAnalyzer:
     """
@@ -45,19 +48,48 @@ class CanvasAnalyzer:
             Dict: Dictionary containing the analysis results
         """
         try:
-
+            logger.info("detection started")
             detection=self.vision_analyzer.detect_problem_type_and_context(image_path)
+            logger.info(
+                """
+                Detection result:
+                success: %s
+                problem_type: %s
+                context: %s
+                """,
+                detection.get("success"),
+                detection.get("problem_type"),
+                detection.get("context")
+            )
+    
+
             if detection["success"]:
                 problem_type = detection["problem_type"]
                 context = detection["context"]
             else:
                 problem_type = "general"
                 context = ""
+
+
             #Build the specialized prompt based on problem type
             prompt= self._build_canvas_prompt(context, problem_type)
 
             #analyze image using vision api
             analysis_result = self.vision_analyzer.analyze_image(image_path, prompt)
+            logger.info(
+                """
+                Analysis result:
+                success: %s
+                analysis: %s
+                image_path: %s
+                query: %s
+                """,
+                analysis_result.get("success"),
+                analysis_result.get("analysis"),
+                analysis_result.get("image_path"),
+                analysis_result.get("query")
+            )
+            
 
             if not analysis_result["success"]:
                 return {
@@ -66,7 +98,31 @@ class CanvasAnalyzer:
                     "error": analysis_result["error"]
                 }
 
+            logger.info("feedback generation started")
+
             feedback = self._structure_feedback(analysis_result["analysis"], problem_type)
+
+            logger.info(
+                """
+                Feedback generation result:
+                status: %s
+                feedback: %s
+                problem: %s
+                analysis: %s
+                hints: %s
+                encouragement: %s
+                next_step: %s
+                mistakes: %s
+                """,
+                feedback.get("status"),
+                feedback.get("feedback"),
+                feedback.get("problem"),
+                feedback.get("analysis"),
+                feedback.get("hints"),
+                feedback.get("encouragement"),
+                feedback.get("next_step"),
+                feedback.get("mistakes")
+            )
 
             return {
                 "status": "success",
@@ -181,7 +237,21 @@ class CanvasAnalyzer:
             Dict: Dictionary containing the annotations
         """
         try:
+            logger.info("annotation started")
             detection = self.vision_analyzer.detect_problem_type_and_context(image_path)
+            logger.info(
+                """
+                Annotation detection result:
+                success: %s
+                problem_type: %s
+                context: %s
+                """,
+                detection.get("success"),
+                detection.get("problem_type"),
+                detection.get("context")
+            )
+
+
             if detection["success"]:
                 problem_type = detection["problem_type"] or ""
                 context = detection["context"] or ""
@@ -190,6 +260,22 @@ class CanvasAnalyzer:
                 context = ""
             prompt= f"Context: {context}\nProblem Type: {problem_type}\n\n{ANNOTATION_PROMPT}"
             result = self.vision_analyzer.annotate_image(image_path, prompt)
+
+            logger.info(
+                """
+                Annotation result:
+                success: %s
+                annotations: %s
+                metadata: %s
+                raw: %s
+                model: %s
+                """,
+                result.get("success"),
+                result.get("annotations"),
+                result.get("metadata"),
+                result.get("raw"),
+                result.get("model")
+            )
             if not result["success"]:
                 return {
                     "status": "error",

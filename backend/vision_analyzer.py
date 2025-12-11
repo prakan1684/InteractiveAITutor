@@ -6,6 +6,8 @@ from prompts.canvas_prompts import get_vision_prompt, DETECTION_PROMPT
 import base64
 import json
 
+from logger import get_logger
+logger = get_logger(__name__)
 
 
 load_dotenv()
@@ -45,7 +47,7 @@ class VisionAnalyzer:
                 )
                 return result.id
         except Exception as e:
-            print(f"Error creating file for vision: {e}")
+            logger.error(f"Error creating file for vision: {e}")
             return None
 
     
@@ -87,13 +89,16 @@ class VisionAnalyzer:
             )
 
             analysis = response.output_text
-            print("analysis generated successfully")
+            if analysis:
+                logger.info("image analysis generated successfully")
+            else:
+                logger.error("image analysis failed")
 
             #clean up and delete the uploaded file
 
             try:
                 self.client.files.delete(file_id)
-                print("file deleted successfully")
+                
             except Exception as e:
                 pass
 
@@ -106,7 +111,7 @@ class VisionAnalyzer:
             }
             
         except Exception as e:
-            print(f"Error analyzing image: {e}")
+            logger.error(f"Error analyzing image: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -183,11 +188,10 @@ class VisionAnalyzer:
 
             result = self._parse_detection_response(analysis)
             result['success'] = True
-            print(f"Detected: {result['problem_type']} - {result['context']}")
             return result
 
         except Exception as e:
-            print(f"Error detecting problem type and context: {e}")
+            
             return {
                 "success": False,
                 "error": str(e),
@@ -232,7 +236,7 @@ class VisionAnalyzer:
             
             return result
         except Exception as e:
-            print(f"Error parsing detection response: {e}")
+            logger.error(f"Error parsing detection response: {e}")
             return {
                 "problem_type": None,
                 "context": None,

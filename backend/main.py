@@ -20,6 +20,18 @@ from typing import Dict, Optional
 import uuid
 import os
 from pathlib import Path
+from fastapi import Request
+from logging_context import request_id_ctx
+from logging_config import setup_logging
+from logger import get_logger
+
+
+setup_logging(level="INFO")
+
+
+
+
+logger = get_logger(__name__)
 
 class ChatRequest(BaseModel):
     message: str
@@ -37,6 +49,15 @@ app = FastAPI(
     version = "0.0.1"
 )
 
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    token = request_id_ctx.set(str(uuid.uuid4()))
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        request_id_ctx.reset(token)
 
 # Adding cors middleware
 # CORS allows frontend on port 3000 to talk to backend on port 8000
@@ -231,6 +252,9 @@ async def analyze_canvas(
 
 
     try:
+
+        logger.info("canvas upload received: filenames=%s", image.filename)
+
         #create a dir for canvas uploads
 
         canvas_dir = Path("canvas_uploads")
@@ -238,8 +262,12 @@ async def analyze_canvas(
 
         #save uploaded file to canvas dir
         file_extention = Path(image.filename).suffix
+
+
         unique_filename = f"canvas_{uuid.uuid4()}{file_extention}"
         file_path = canvas_dir / (unique_filename)
+
+        logger.info("canvas file saved to %s", file_path)
 
 
         #open file
@@ -247,19 +275,20 @@ async def analyze_canvas(
             content = await image.read()
             buffer.write(content)
         
-
-        print(f"Canvas image saved to {file_path}")
-
         #analyze canvas with automatic detection
         analyzer = CanvasAnalyzer()
 
 
         analysis_result = analyzer.analyze_student_work(str(file_path))
+        logger.info("canvas analysis started")
+        logger.info("canvas analysis result: %s", analysis_result.get("status"))
         annotations_result = analyzer.annotate_student_work(str(file_path))
-
+        logger.info("canvas annotation started")
+        logger.info("canvas annotation result: %s, count=%s", annotations_result.get("status"), len(annotations_result.get("annotations", [])))
 
         #remove the uplaoded file
         file_path.unlink()
+        logger.info("canvas file removed")
 
         return {
             # analysis
@@ -277,6 +306,7 @@ async def analyze_canvas(
                 if annotations_result.get("status") != "success" else None,
         }
     except Exception as e:
+        logger.error("canvas analysis failed: %s", str(e))
         return {
             "error": str(e),
             "status": "error"
