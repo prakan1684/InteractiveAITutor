@@ -1,5 +1,5 @@
 
-# Interactive AI Tutor
+# Elara
 
 AI-powered math tutoring app with handwriting recognition.
 
