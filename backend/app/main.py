@@ -22,7 +22,7 @@ from logging_context import request_id_ctx
 from logging_config import setup_logging
 from logger import get_logger
 
-from .routers import canvas, upload, chat, get_documents
+from .routers import canvas, upload, chat, get_documents, regions
 
 setup_logging(level="INFO")
 
@@ -51,6 +51,7 @@ app.include_router(canvas.router)
 app.include_router(upload.router)
 app.include_router(chat.router)
 app.include_router(get_documents.router)
+app.include_router(regions.router)
 
 
 @app.middleware("http")
