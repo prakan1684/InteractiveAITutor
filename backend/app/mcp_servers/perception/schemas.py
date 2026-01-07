@@ -7,6 +7,7 @@ These schemas are used by both MCP tools and the orchestrator.
 
 from typing import List, Tuple, Optional, Literal
 from pydantic import BaseModel, Field
+from dataclasses import dataclass
 
 
 class Region(BaseModel):
@@ -68,3 +69,49 @@ class AnalyzeCanvasOutput(BaseModel):
     steps: List[Step]
     problem_type_guess: Optional[str] = None
     global_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+class StrokePoint(BaseModel):
+    x: float
+    y: float
+    t: float
+    pressure: Optional[float] = None
+
+class Stroke(BaseModel):
+    id: str
+    tool: Optional[str] = None
+    colorHex: Optional[str] = None
+    width: Optional[float] = None
+    opacity: Optional[float] = None
+    startedAt: Optional[float] = None
+    endedAt: Optional[float] = None
+    points: List[StrokePoint]
+
+@dataclass
+class Box:
+    x: float
+    y: float
+    w: float
+    h: float
+
+    @property    
+    def right(self) -> float:
+        return self.x + self.w
+
+    @property
+    def bottom(self) -> float:
+        return self.y + self.h
+
+    @property
+    def width(self) -> float:
+        return self.w
+
+    @property
+    def height(self) -> float:
+        return self.h
+    
+    @property
+    def center(self) -> Tuple[float, float]:
+        return (self.x + self.w / 2, self.y + self.h / 2)
+
+
+

@@ -11,6 +11,8 @@ import json
 from PIL import Image, ImageDraw
 import io
 import uuid
+from app.mcp_servers.perception.schemas import Box
+from app.services.clustering import cluster_strokes
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -22,11 +24,17 @@ async def regions(
     regions: str = Form(...),
     image_width: int = Form(...),
     image_height: int = Form(...),
+    strokes: str = Form(...)
  ):
     geometry = json.loads(regions)
+    strokes = json.loads(strokes)
     image_bytes = await image.read()
     img = Image.open(io.BytesIO(image_bytes))
+    stroke_list = strokes.get("strokes", strokes)
+    if not isinstance(stroke_list, list):
+        stroke_list = []
 
+    clusters, symbol_boxes, stroke_boxes = cluster_strokes(stroke_list)
 
     #create drawing context
     draw = ImageDraw.Draw(img)
@@ -34,29 +42,39 @@ async def regions(
 
 
     colors = ["red", "green", "blue", "yellow", "orange", "purple", "pink", "brown", "gray", "black"]
-    for i, region in enumerate(geometry):
-        bbox_px = normalized_to_pixel(region, image_width, image_height)
-
-        logger.debug(f"Region {i}: {bbox_px}")
-
+    for i, b in enumerate(stroke_boxes):
+        bbox_px = normalized_to_pixel(
+            {"x": b.x, "y": b.y, "width": b.w, "height": b.h},
+            image_width,
+            image_height,
+        )
         color = colors[i % len(colors)]
+        #draw.rectangle(bbox_px, outline=color, width=2)
+        #draw.text((bbox_px[0], bbox_px[1] - 15), f"Stroke {i}", fill=color)
 
-
-        draw.rectangle(bbox_px, outline=color, width=2)
-        
-
-        draw.text((bbox_px[0], bbox_px[1]-15), f"Region {i}", fill=color)
+    for i, b in enumerate(symbol_boxes):
+        bbox_px = normalized_to_pixel(
+            {"x": b.x, "y": b.y, "width": b.w, "height": b.h},
+            image_width,
+            image_height,
+        )
+        draw.rectangle(bbox_px, outline="cyan", width=4)
+        draw.text((bbox_px[0], bbox_px[1] - 15), f"Symbol {i}", fill="cyan")
 
     debug_path = f"/tmp/debug_{uuid.uuid4().hex[:8]}.png"
     img.save(debug_path)
 
     logger.info(f"Saved debug image to {debug_path}")
 
+
     return {
         "success": True, 
         "received_regions": geometry, 
         "image_width": image_width, 
-        "image_height": image_height
+        "image_height": image_height,
+        "clusters": clusters,
+        "symbol_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in symbol_boxes],
+        "stroke_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in stroke_boxes],
     }
 
 def normalized_to_pixel(
@@ -69,6 +87,10 @@ def normalized_to_pixel(
     w_px = int(bbox_norm['width'] * img_width)
     h_px = int(bbox_norm['height'] * img_height)
     return [x_px, y_px, x_px + w_px, y_px + h_px]
+
+
+
+
     
     
     

@@ -1,7 +1,7 @@
 
+import math
 from typing import List, Dict, Tuple
-from app.mcp_servers.perception.schemas import Region, Expression, Step, AnalyzeCanvasOutput
-
+from app.mcp_servers.perception.schemas import Region, Expression, Step, AnalyzeCanvasOutput, Box
 
 
 def analyze_canvas_image(image_path:str) -> AnalyzeCanvasOutput:
@@ -50,9 +50,8 @@ async def guess_problem_type(steps:List[Step], expressions:List[Expression]) -> 
     """
     return "", 0.0
 
-
-
-
-
-
     
+
+
+
+
