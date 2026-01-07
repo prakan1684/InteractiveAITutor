@@ -13,6 +13,8 @@ import io
 import uuid
 from app.mcp_servers.perception.schemas import Box
 from app.services.clustering import cluster_strokes
+from app.services.canvas_context import CanvasContext
+from app.services.sprite_sheet import build_sprite_sheet_from_ctx
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -35,6 +37,14 @@ async def regions(
         stroke_list = []
 
     clusters, symbol_boxes, stroke_boxes = cluster_strokes(stroke_list)
+
+
+    ctx = CanvasContext(
+        image_width=image_width,
+        image_height=image_height,
+        symbol_boxes=symbol_boxes,
+        image_bytes=image_bytes,
+    )
 
     #create drawing context
     draw = ImageDraw.Draw(img)
@@ -60,6 +70,11 @@ async def regions(
         )
         draw.rectangle(bbox_px, outline="cyan", width=4)
         draw.text((bbox_px[0], bbox_px[1] - 15), f"Symbol {i}", fill="cyan")
+    
+    sprite_sheet = build_sprite_sheet_from_ctx(ctx)
+    sprite_sheet_path = f"/tmp/sprite_sheet_{uuid.uuid4().hex[:8]}.png"
+    sprite_sheet.save(sprite_sheet_path)
+    logger.info(f"Saved sprite sheet to {sprite_sheet_path}")
 
     debug_path = f"/tmp/debug_{uuid.uuid4().hex[:8]}.png"
     img.save(debug_path)
