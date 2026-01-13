@@ -11,10 +11,17 @@ import json
 from PIL import Image, ImageDraw
 import io
 import uuid
-from app.mcp_servers.perception.schemas import Box
+from datetime import datetime
+
+from app.agents.graph import build_graph
+from app.agents.schemas import State
+from app.mcp_servers.perception.schemas import Box, Stroke
 from app.services.clustering import cluster_strokes
 from app.services.canvas_context import CanvasContext
 from app.services.sprite_sheet import build_sprite_sheet_from_ctx
+
+GRAPH = build_graph()
+
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -32,12 +39,36 @@ async def regions(
     strokes = json.loads(strokes)
     image_bytes = await image.read()
     img = Image.open(io.BytesIO(image_bytes))
-    stroke_list = strokes.get("strokes", strokes)
+    stroke_list = []
+    if isinstance(strokes, dict):
+        stroke_list = strokes.get("strokes", [])
+    elif isinstance(strokes, list):
+        stroke_list = strokes
+
     if not isinstance(stroke_list, list):
         stroke_list = []
 
+    stroke_models: List[Stroke] = []
+    for s in stroke_list:
+        if not isinstance(s, dict):
+            continue
+        try:
+            stroke_models.append(Stroke(**s))
+        except Exception:
+            continue
+
     clusters, symbol_boxes, stroke_boxes = cluster_strokes(stroke_list)
 
+    """
+    From this point we have clusters, symbol_boxes, and stroke_boxes
+
+    clusters: List[List[int]]
+        - List of indices of strokes that belong to each symbol
+    symbol_boxes: List[Box]
+        - Merged bounding boxes of strokes in each cluster
+    stroke_boxes: List[Box]
+        - Bounding boxes of each stroke
+    """
 
     ctx = CanvasContext(
         image_width=image_width,
@@ -81,15 +112,59 @@ async def regions(
 
     logger.info(f"Saved debug image to {debug_path}")
 
+    try:
+        state = State(
+            session_id="test_session",
+            student_id="test_student",
+            img_path=debug_path,
+            strokes=stroke_models,
+            created_at=datetime.now(),
+            sprite_sheet_path=sprite_sheet_path,
+        )
+        out_state = GRAPH.invoke(state)
+    except Exception as e:
+        return {
+            "status": "error",
+            "problem_type": None,
+            "context": None,
+            "feedback": None,
+            "annotations": None,
+            "annotation_status": "error",
+            "annotation_error": str(e),
+            "annotation_metadata": None,
+            "error": str(e),
+        }
+
+    final_response = out_state.get("final_response")
 
     return {
-        "success": True, 
-        "received_regions": geometry, 
-        "image_width": image_width, 
-        "image_height": image_height,
-        "clusters": clusters,
-        "symbol_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in symbol_boxes],
-        "stroke_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in stroke_boxes],
+        "status": "ok",
+        "problem_type": None,
+        "context": None,
+        "feedback": {
+            "problem": "",
+            "analysis": final_response or "",
+            "hints": [],
+            "mistakes": [],
+            "next_step": "",
+            "encouragement": "",
+        },
+        "annotations": [],
+        "annotation_status": "skipped",
+        "annotation_error": None,
+        "annotation_metadata": None,
+        "error": None,
+        "debug": {
+            "received_regions": geometry,
+            "image_width": image_width,
+            "image_height": image_height,
+            "clusters": clusters,
+            "symbol_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in symbol_boxes],
+            "stroke_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in stroke_boxes],
+            "debug_image_path": debug_path,
+            "sprite_sheet_path": sprite_sheet_path,
+            "agent_flags": out_state.get("flags", {}),
+        },
     }
 
 def normalized_to_pixel(
