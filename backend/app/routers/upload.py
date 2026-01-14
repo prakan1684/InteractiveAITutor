@@ -3,8 +3,8 @@ from fastapi import APIRouter
 from fastapi import File, UploadFile
 from pathlib import Path
 import uuid
-from logger import get_logger 
-from multimodel_processor import MultimodelProcessor
+from app.core.logger import get_logger 
+from app.services.multimodel_processor import MultimodelProcessor
 
 logger = get_logger(__name__)
 

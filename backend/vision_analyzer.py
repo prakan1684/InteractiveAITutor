@@ -6,7 +6,7 @@ from prompts.canvas_prompts import get_vision_prompt, DETECTION_PROMPT
 import base64
 import json
 
-from logger import get_logger
+from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 

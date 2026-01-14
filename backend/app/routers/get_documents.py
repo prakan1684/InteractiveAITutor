@@ -1,9 +1,9 @@
 
 
 from fastapi import APIRouter
-from document_processor import get_available_documents
-from document_processor import chroma_client
-from logger import get_logger
+from app.services.document_processor import get_available_documents
+from app.services.document_processor import chroma_client
+from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 

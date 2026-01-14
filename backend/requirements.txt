@@ -9,7 +9,7 @@ pydantic-settings==2.1.0
 
 # AI & ML
 httpx<0.25.0
-openai==1.3.0
+openai>=1.50.0
 
 # File Processing
 PyPDF2==3.0.1
@@ -31,3 +31,7 @@ open-clip-torch==2.24.0
 
 langgraph
 langchain-core
+
+
+azure-storage-blob>=12.19.0
+azure-identity>=1.15.0

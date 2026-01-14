@@ -13,10 +13,10 @@ import os
 import json
 import uuid
 import re
-from logging_config import setup_logging
+from app.core.logging_config import setup_logging
 setup_logging(level="INFO")
 
-from logger import get_logger
+from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 class CanvasAnalyzer:

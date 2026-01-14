@@ -5,7 +5,9 @@ from the ios canvas app
 """
 
 from fastapi import APIRouter, File, UploadFile, Form
-from logger import get_logger
+from app.services.azure_blob_storage import azure_blob_storage
+from fastapi.encoders import jsonable_encoder
+from app.core.logger import get_logger
 from typing import List, Dict
 import json
 from PIL import Image, ImageDraw
@@ -33,12 +35,33 @@ async def regions(
     regions: str = Form(...),
     image_width: int = Form(...),
     image_height: int = Form(...),
-    strokes: str = Form(...)
+    strokes: str = Form(...),
+    session_id: str = Form(...),
+    student_id: str = Form(...),
  ):
     geometry = json.loads(regions)
     strokes = json.loads(strokes)
+
+    canvas_filename= f"canvas_{session_id}.png"
+
     image_bytes = await image.read()
+
+    canvas_url = azure_blob_storage.upload_canvas_image(
+        image_data=image_bytes,
+        filename=canvas_filename,
+        metadata={
+            "session_id": session_id, 
+            "student_id": student_id, 
+            "timestamp": datetime.now().isoformat()
+        }
+    )
+
+
+
+    
     img = Image.open(io.BytesIO(image_bytes))
+    image_width, image_height = img.size
+
     stroke_list = []
     if isinstance(strokes, dict):
         stroke_list = strokes.get("strokes", [])
@@ -103,25 +126,48 @@ async def regions(
         draw.text((bbox_px[0], bbox_px[1] - 15), f"Symbol {i}", fill="cyan")
     
     sprite_sheet = build_sprite_sheet_from_ctx(ctx)
-    sprite_sheet_path = f"/tmp/sprite_sheet_{uuid.uuid4().hex[:8]}.png"
-    sprite_sheet.save(sprite_sheet_path)
-    logger.info(f"Saved sprite sheet to {sprite_sheet_path}")
+    
+    sprite_buffer = io.BytesIO()
+    sprite_sheet_img.save(sprite_buffer, format="PNG")
+    sprite_filename = f"sprite_sheet_{session_id}.png"
+    sprite_url = azure_blob_storage.upload_debug_image(
+        image_data=sprite_buffer.getvalue(),
+        filename=sprite_filename,
+        session_id=session_id
+    )
 
-    debug_path = f"/tmp/debug_{uuid.uuid4().hex[:8]}.png"
-    img.save(debug_path)
+    logger.info(f"Uploaded sprite sheet: {sprite_filename}")
 
-    logger.info(f"Saved debug image to {debug_path}")
-
+    #upload debug to azure
+    debug_buffer = io.BytesIO()
+    debug_img.save(debug_buffer, format='PNG')
+    debug_filename = f"debug_{session_id}.png"
+    
+    debug_url = azure_blob_storage.upload_debug_image(
+        image_data=debug_buffer.getvalue(),
+        filename=debug_filename,
+        session_id=session_id
+    )
+    logger.info(f"Debug image uploaded to Azure: {debug_url}")
+    
     try:
         state = State(
-            session_id="test_session",
-            student_id="test_student",
-            img_path=debug_path,
+            session_id=session_id,
+            student_id=student_id,
+            img_path=canvas_url,
             strokes=stroke_models,
             created_at=datetime.now(),
-            sprite_sheet_path=sprite_sheet_path,
+            sprite_sheet_path=sprite_url,
         )
+        logger.info("Invoking graph")
         out_state = GRAPH.invoke(state)
+        logger.info("Graph invoked")
+        final_response = out_state.get("final_response")
+        annotations = out_state.get("annotations")
+        if not isinstance(annotations, list):
+            annotations = []
+        annotation_status = "ok" if len(annotations) > 0 else "skipped"
+        logger.info(f"Annotation status: {annotation_status}")
     except Exception as e:
         return {
             "status": "error",
@@ -135,9 +181,8 @@ async def regions(
             "error": str(e),
         }
 
-    final_response = out_state.get("final_response")
-
-    return {
+    
+    payload = {
         "status": "ok",
         "problem_type": None,
         "context": None,
@@ -149,8 +194,8 @@ async def regions(
             "next_step": "",
             "encouragement": "",
         },
-        "annotations": [],
-        "annotation_status": "skipped",
+        "annotations": annotations,
+        "annotation_status": annotation_status,
         "annotation_error": None,
         "annotation_metadata": None,
         "error": None,
@@ -161,11 +206,20 @@ async def regions(
             "clusters": clusters,
             "symbol_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in symbol_boxes],
             "stroke_boxes": [{"x": b.x, "y": b.y, "width": b.w, "height": b.h} for b in stroke_boxes],
-            "debug_image_path": debug_path,
-            "sprite_sheet_path": sprite_sheet_path,
-            "agent_flags": out_state.get("flags", {}),
+            "debug_image_path": debug_url,
+            "canvas_image_path": canvas_url,
+            "sprite_sheet_path": sprite_url,
+            "agent_flags": dict(out_state.get("flags", {})),
         },
     }
+    logger.info("About to serialize payload")
+    try:
+        jsonable_encoder(payload)
+        logger.info("response Serialization OK")
+    except:
+        logger.error("response Serialization failed")
+        raise
+    return payload
 
 def normalized_to_pixel(
     bbox_norm: Dict[str, float],

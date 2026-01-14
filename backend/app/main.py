@@ -14,13 +14,14 @@ Entry point for the FastAPI application.
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from ai_service import chat_with_ai
+from app.services.ai_service import chat_with_ai
 import uuid
 from pathlib import Path
 from fastapi import Request
-from logging_context import request_id_ctx
-from logging_config import setup_logging
-from logger import get_logger
+from app.core.logging_context import request_id_ctx
+from app.core.logging_config import setup_logging
+from app.core.logger import get_logger
+from app.core.config import settings
 
 from .routers import canvas, upload, chat, get_documents, regions
 

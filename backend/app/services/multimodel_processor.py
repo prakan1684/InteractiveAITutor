@@ -15,8 +15,8 @@ from datetime import datetime
 import chromadb
 from dotenv import load_dotenv
 
-from vision_analyzer import VisionAnalyzer
-from document_processor import chroma_client
+from app.services.vision import VisionService
+from app.services.document_processor import chroma_client
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ class MultimodelProcessor:
 
     def __init__(self):
         self.chroma_client = chroma_client
-        self.vision_analyzer = VisionAnalyzer()
+        self.vision_service = VisionService()
         self.supported_image_types = {
             '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'
         }
@@ -201,7 +201,7 @@ class MultimodelProcessor:
             collection_count = 0
         
         try:
-            vision_status = "connected" if self.vision_analyzer else "not connected"
+            vision_status = "connected" if self.vision_service else "not connected"
         except Exception as e:
             vision_status = "error: " + str(e)
         
@@ -213,9 +213,9 @@ class MultimodelProcessor:
                     "status": chroma_status,
                     "collections": collection_count
                 },
-                "vision_analyzer": {
+                "vision_service": {
                     "status": vision_status,
-                    "model": getattr(self.vision_analyzer, 'model_name', 'unknown')
+                    "model": getattr(self.vision_service, 'model_name', 'unknown')
                 }
             },
             "supported_formats": {
@@ -274,7 +274,7 @@ class MultimodelProcessor:
 
 
             #analyze image
-            analysis_result = self.vision_analyzer.analyze_image(image_path)
+            analysis_result = self.vision_service.analyze_image(image_path)
 
             if not analysis_result["success"]:
                 return {
@@ -389,6 +389,3 @@ class MultimodelProcessor:
                 
 
      
-if __name__ == "__main__":
-    test()
-    

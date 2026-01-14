@@ -3,7 +3,7 @@ from fastapi import File, UploadFile
 from canvas_analyzer import CanvasAnalyzer
 from pathlib import Path
 import uuid
-from logger import get_logger
+from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 

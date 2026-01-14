@@ -1,13 +1,13 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from ai_service import chat_with_ai
-from multimodel_processor import MultimodelProcessor
+from app.services.ai_service import chat_with_ai
+from app.services.multimodel_processor import MultimodelProcessor
 
 
 
 router = APIRouter()
 
-from logger import get_logger
+from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -159,6 +159,26 @@ def get_canvas_prompt(problem_type: str, context: str = None) -> str:
 # Vision analysis prompts (aligned with structure)
 # -------------------------
 
+SPRITE_SHEET_OCR_PROMPT = """
+You are given a sprite sheet image. Each tile has a label like 'ID:0', 'ID:1', etc.
+
+Task:
+- For each visible tile label ID:i, read the handwritten math symbol/expression in that tile.
+- Return STRICT JSON only (no markdown) in this format:
+
+{
+  "tiles": [
+    {"id": 0, "latex": "...", "confidence": 0.0},
+    {"id": 1, "latex": "...", "confidence": 0.0}
+  ]
+}
+
+Rules:
+- latex must be a string (use best-effort LaTeX).
+- confidence is 0..1.
+- If unreadable: latex should be "" and confidence 0.
+"""
+
 VISION_ANALYSIS_WITH_QUERY = """
 You are Pocket Professor, an educational AI tutor.
 
