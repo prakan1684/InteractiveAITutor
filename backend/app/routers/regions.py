@@ -13,6 +13,7 @@ import json
 from PIL import Image, ImageDraw
 import io
 import uuid
+from app.services.session_manager import session_manager
 from datetime import datetime
 
 from app.agents.graph import build_graph
@@ -128,7 +129,7 @@ async def regions(
     sprite_sheet = build_sprite_sheet_from_ctx(ctx)
     
     sprite_buffer = io.BytesIO()
-    sprite_sheet_img.save(sprite_buffer, format="PNG")
+    sprite_sheet.save(sprite_buffer, format="PNG")
     sprite_filename = f"sprite_sheet_{session_id}.png"
     sprite_url = azure_blob_storage.upload_debug_image(
         image_data=sprite_buffer.getvalue(),
@@ -140,7 +141,7 @@ async def regions(
 
     #upload debug to azure
     debug_buffer = io.BytesIO()
-    debug_img.save(debug_buffer, format='PNG')
+    img.save(debug_buffer, format='PNG')
     debug_filename = f"debug_{session_id}.png"
     
     debug_url = azure_blob_storage.upload_debug_image(
@@ -163,6 +164,23 @@ async def regions(
         out_state = GRAPH.invoke(state)
         logger.info("Graph invoked")
         final_response = out_state.get("final_response")
+
+        try:
+            symbols = out_state.get("symbols", [])
+            flags = out_state.get("flags", {})
+
+            session_manager.store_canvas_session(
+                session_id=session_id,
+                student_id=student_id,
+                final_response=final_response,
+                symbols=symbols,
+                flags=flags
+            )
+        except Exception as e:
+            logger.error(f"Error storing canvas session: {e}")
+
+
+
         annotations = out_state.get("annotations")
         if not isinstance(annotations, list):
             annotations = []

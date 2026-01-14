@@ -35,3 +35,6 @@ langchain-core
 
 azure-storage-blob>=12.19.0
 azure-identity>=1.15.0
+
+pdfplumber==0.10.3
+tiktoken==0.5.2

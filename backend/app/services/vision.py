@@ -30,6 +30,8 @@ class VisionService:
 
             if isinstance(file_content, BytesIO):
                 file_content.close()
+            else: 
+                file_content.close()
             return result.id
         except Exception as e:
             logger.error(f"Error creating file for vision: {e}")

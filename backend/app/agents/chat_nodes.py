@@ -1,5 +1,6 @@
 from app.agents.schemas import ChatState
 from app.services.ai_service import AIService
+from app.services.session_manager import session_manager
 import asyncio
 from app.core.logger import get_logger
 
@@ -89,13 +90,35 @@ async def retrieve_context(state: ChatState) -> ChatState:
 
     """
 
-    logger.info("Retrieving context for intent: %s", state.intent)
-    logger.info("Canvas context needed: %s", state.needs_canvas_context)
-    logger.info("Course context needed: %s", state.needs_course_context)
-    logger.info("Tools needed: %s", state.needs_tools)
+    if state.needs_canvas_context:
+        canvas_context= []
+        recent = session_manager.get_recent_context(state.student_id)
+        if recent:
+            canvas_context.append({
+                "source": "recent_session",
+                "age": "<30 min",
+                "data": recent
+            })
+        
+        #strat 2, historical canvas sessions
+        historical = session_manager.search_canvas_history(
+            student_id=state.student_id,
+            query=state.user_message,
+            top_k=5
+        )
 
+        for session in historical:
+            canvas_context.append({
+                "source": "historical_session",
+                "score": session.get("score", 0.0),
+                "data": session
+            })
+        
+        if len(canvas_context) == 0:
+            state.reasoning_steps.append("No Canvas Context found")
+        
 
-    from app.services.multimodel_processor import MultiModelProcessor 
+        state.canvas_context = canvas_context
     
 
 
