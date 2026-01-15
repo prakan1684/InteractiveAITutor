@@ -1,6 +1,7 @@
 from app.agents.schemas import ChatState
 from app.services.ai_service import AIService
 from app.services.session_manager import session_manager
+from app.services.course_rag_service import CourseRAGService
 import asyncio
 from app.core.logger import get_logger
 
@@ -119,7 +120,112 @@ async def retrieve_context(state: ChatState) -> ChatState:
         
 
         state.canvas_context = canvas_context
+        state.reasoning_steps.append(f"Canvas Context retrieved {len(canvas_context)} items")
+
+    if state.needs_course_context:
+        course_service = CourseRAGService()
+        course_context = course_service.search_materials(state.user_message, top_k=5)
+        state.course_context = course_context
+        state.reasoning_steps.append(f"Course Context retrieved {len(course_context)} items")
     
+    return state
+
+
+async def reason(state: ChatState) -> ChatState:
+    """
+    Reasons about the users question and retrieved context
+    """
+
+    #build context summary
+    context_summary = []
+
+    if state.canvas_context:
+        context_summary.append(f"Context from Canvas: {len(state.canvas_context)} items")
+    if state.course_context:
+        context_summary.append(f"Context from Course: {len(state.course_context)} items")
+    
+
+    reasoning_prompt = f"""You are an AI tutor. Analyze this student question and available context.
+
+Student Question: {state.user_message}
+
+Available Context:
+{chr(10).join(context_summary)}
+
+Canvas Context:
+{state.canvas_context[:2] if state.canvas_context else "None"}
+
+Course Materials:
+{[c['content'][:200] for c in state.course_context[:2]] if state.course_context else "None"}
+
+Respond with a JSON object in this exact format:
+{{
+  "key_concepts": ["concept1", "concept2"],
+  "knowledge_level": "beginner",
+  "approach": "brief description of best teaching approach",
+  "confidence": 0.85
+}}
+"""
+    try:
+        ai = AIService(default_model="gpt-4o-mini")
+        response = await ai.complete(
+            messages = [{"role": "user", "content": reasoning_prompt}],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+
+        import json
+        reasoning = json.loads(response.content)
+
+        state.reasoning_steps.append(f"Reasoning: {reasoning.get('key_concepts', 'N/A')}")
+        state.confidence = reasoning.get('confidence', 0.0)
+    except Exception as e:
+        logger.error("Error reasoning: %s", e)
+        state.reasoning_steps.append(f"Reasoning failed: {str(e)}")
+        state.confidence = 0.0
+    
+    return state
+
+
+async def respond(state: ChatState) -> ChatState:
+    """
+    Generate final response to student 
+    """
+
+    response_prompt = f"""You are a helpful AI tutor. Answer the student's question using the provided context.
+Student Question: {state.user_message}
+Canvas History:
+{state.canvas_context if state.canvas_context else "No recent work"}
+Course Materials:
+{[c['content'] for c in state.course_context[:3]] if state.course_context else "No materials found"}
+Reasoning:
+{chr(10).join(state.reasoning_steps)}
+Provide a clear, educational response. If referencing their past work, be specific.
+"""
+    
+    try:
+        ai = AIService(default_model="gpt-4o-mini")
+        response = await ai.complete(
+            messages=[{"role": "user", "content": response_prompt}],
+            temperature=0.7,
+        )
+
+        state.final_response = response.content
+
+        state.follow_up_suggestions = [
+            "Would you like me to explain any concept in more detail?",
+            "Do you want to see similar problems?",
+            "Should I review your previous work?"
+        ]
+
+    except Exception as e:
+        logger.error("Error responding: %s", e)
+        state.final_response = "I'm sorry, I was unable to generate a response. Please try again."
+        state.follow_up_suggestions = []
+    
+    return state
+
+
 
 
     

@@ -1,142 +1,210 @@
-# Interactive AI Tutor - Backend
+# Pocket Professor - Backend
 
-AI-powered educational platform that analyzes handwritten math work in real-time, providing intelligent tutoring feedback through computer vision and natural language processing.
+FastAPI backend with Azure Cognitive Search, LangGraph agents, and intelligent three-mode chat system.
 
-## 🎯 Problem Statement
+## 🎯 Overview
 
-Students learning math often get stuck and need immediate feedback, but tutors aren't always available. This system bridges that gap by:
-- Analyzing handwritten work in real-time
-- Understanding mathematical reasoning and common mistakes
-- Providing Socratic guidance without giving away answers
-- Adapting to different problem types (algebra, geometry, calculus, etc.)
+Production-ready AI tutoring backend featuring:
+- **Three-mode chat system** with adaptive response times
+- **Azure Cognitive Search** for scalable RAG
+- **LangGraph agents** for intent classification and reasoning
+- **Canvas analysis** with session management
+- **PDF processing** with smart chunking and embeddings
 
-## 🏗️ Technical Overview
+## 🏗️ Architecture
 
-### Architecture
-
-Built with a **layered service architecture** for scalability and maintainability:
+### System Design
 
 ```
-iOS Canvas App (SwiftUI)
-        ↓
-   FastAPI Backend
-        ↓
-  OpenAI Vision API
+┌─────────────────────────────────────────────────┐
+│              FastAPI Routers                    │
+│  /chat  /upload  /regions  /canvas  /documents │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│              Service Layer                      │
+│  • AIService (OpenAI wrapper)                   │
+│  • CourseRAGService (PDF processing)            │
+│  • SessionManager (Canvas sessions)             │
+│  • VisionService (Image analysis)               │
+│  • AzureSearchService (Index management)        │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│            LangGraph Agents                     │
+│  • classify_intent → retrieve_context           │
+│  • reason → respond                             │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│         External Services                       │
+│  • Azure Cognitive Search                       │
+│  • OpenAI GPT-4o / text-embedding-3-small       │
+└─────────────────────────────────────────────────┘
 ```
 
-**Key Design Principles:**
-- **Separation of concerns**: Infrastructure, business logic, and presentation layers
-- **Type safety**: Pydantic schemas throughout
-- **Async-first**: Non-blocking I/O for concurrent request handling
-- **Client-side intelligence**: iOS app tracks strokes and calculates bounding boxes for accuracy
+### Three-Mode Chat System
+
+**1. Simple Chat (2-3s)**
+- Direct GPT-4o conversation
+- No RAG, no reasoning
+- Best for: General questions, greetings
+
+**2. Fast RAG (3-5s)**
+- Direct retrieval from Azure Search
+- Skips reasoning step
+- Best for: Quick factual lookups
+
+**3. Full Analysis (10-15s)**
+- Complete LangGraph pipeline
+- Intent classification → Context retrieval → Reasoning → Response
+- Best for: Complex problems, tutoring
 
 ### Tech Stack
 
 - **Framework**: FastAPI (Python 3.11+)
-- **AI/ML**: OpenAI GPT-4.1 mini Vision API
-- **Image Processing**: PIL/Pillow
+- **AI/ML**: OpenAI GPT-4o, text-embedding-3-small
+- **Search**: Azure Cognitive Search with HNSW vector search
+- **Agents**: LangGraph for workflow orchestration
+- **Image Processing**: pdfplumber, PIL/Pillow
 - **Validation**: Pydantic v2
-- **Development**: uvicorn, ngrok for tunneling
 
 ## 🚀 Features
 
 ### Current Capabilities
 
-✅ **Real-time Canvas Analysis**
-- Receives handwritten math from iOS app
-- Processes stroke-level bounding boxes
-- Validates and visualizes regions for debugging
+✅ **Intelligent Chat System**
+- Three response modes with adaptive latency
+- Intent classification (problem_solving, conceptual, canvas_review, etc.)
+- Confidence scoring
+- Follow-up suggestions
 
-✅ **Coordinate System Management**
-- Normalized coordinates (0-1) for device independence
-- Automatic conversion between coordinate systems
-- Handles different screen sizes and aspect ratios
+✅ **Azure Cognitive Search Integration**
+- `course-materials` index for PDFs
+- `canvas-sessions` index for student work
+- Hybrid vector + keyword search
+- HNSW algorithm for fast vector search
 
-✅ **Robust Error Handling**
-- Comprehensive logging at all layers
-- Graceful degradation on API failures
-- Detailed error messages for debugging
+✅ **PDF Processing Pipeline**
+- pdfplumber text extraction
+- Smart paragraph splitting with LaTeX preservation
+- Chunking with overlap (500 tokens, 50 overlap)
+- Automatic embedding generation
+- Batch upload to Azure Search
 
-### In Development
+✅ **Canvas Analysis**
+- Handwritten math recognition
+- LangGraph workflow for analysis
+- Session storage in Azure Search
+- Dual-layer caching (memory + Azure)
 
-🚧 **Multi-Stroke Symbol Recognition**
-- Clustering algorithm to merge strokes (e.g., "+" sign = 2 strokes)
-- Adaptive distance thresholds
-- Overlap detection
+✅ **Session Management**
+- Recent session cache (30 min TTL)
+- Historical session search
+- Student-specific context retrieval
 
-### Roadmap
+## 💡 Key Technical Decisions
 
-📋 **Planned Features**
-1. Region classification (math expression vs text vs diagram)
-2. Mathematical notation extraction (OCR + LaTeX conversion)
-3. Step-by-step work analysis
-4. Problem type inference (algebra, geometry, etc.)
-5. Intelligent feedback generation
-6. Multi-language support
+### 1. Three-Mode Chat Architecture
 
-## 💡 Key Technical Challenges Solved
+**Challenge**: Full LangGraph pipeline too slow for simple queries
 
-### 1. Client-Side vs Server-Side Region Detection
+**Solution**: Three modes with different latency/depth tradeoffs
 
-**Initial approach**: Use AI to detect bounding boxes from image
+**Result**: 2-3s for simple chat, 10-15s only when needed
 
-**Problem**: Inaccurate, expensive, slow
+### 2. Azure Search vs ChromaDB
 
-**Solution**: iOS app tracks strokes and calculates precise bounding boxes
+**Why Azure Search**:
+- Production-ready, managed service
+- Hybrid search (vector + keyword)
+- Scalable to millions of documents
+- Built-in security and monitoring
 
-**Result**: 3x faster, more accurate, lower API costs
+**Migration**: Replaced ChromaDB with Azure Search for both course materials and canvas sessions
 
-### 2. Coordinate System Design
+### 3. LangGraph Agent Design
 
-**Challenge**: Different devices, screen sizes, image compressions
+**Nodes**: classify_intent → retrieve_context → reason → respond
 
-**Solution**: Normalized coordinates (0-1) with client-provided dimensions
-
-**Benefit**: Device-independent, scales automatically, easier debugging
-
-### 3. Layered Service Architecture
-
-**Vision Service**: Generic OpenAI wrapper (reusable)
-
-**Perception Service**: Canvas-specific logic (domain knowledge)
-
-**Routers**: HTTP handling (thin presentation layer)
-
-**Benefit**: Testable, maintainable, easy to swap implementations
+**Benefit**: Modular, testable, easy to extend with new capabilities
 
 ## 📊 System Performance
 
-- **Latency**: < 2s end-to-end (iOS → Backend → OpenAI → Response)
-- **Accuracy**: High precision with client-side bounding boxes
-- **Scalability**: Async architecture supports concurrent requests
-- **Cost**: Optimized API usage through intelligent caching and batching
+- **Simple Chat**: 2-3s response time
+- **Fast RAG**: 3-5s with context retrieval
+- **Full Analysis**: 10-15s with reasoning
+- **PDF Upload**: ~2s per page for chunking + embedding
+- **Scalability**: Async architecture supports 100+ concurrent requests
 
 ## 🛠️ Development Setup
 
 ### Prerequisites
 
 - Python 3.11+
+- Azure Cognitive Search resource
 - OpenAI API key
-- ngrok (for iOS testing)
 
-### Quick Start
+### Installation
 
 ```bash
-# Clone and setup
-cd backend
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure
+# Configure environment
 cp .env.example .env
-# Add your OPENAI_API_KEY to .env
+```
 
-# Run
+### Environment Variables
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Azure Cognitive Search
+AZURE_SEARCH_ENDPOINT=https://your-search.search.windows.net
+AZURE_SEARCH_KEY=your-admin-key
+
+# Optional
+LOG_LEVEL=INFO
+```
+
+### Run Server
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-# In another terminal (for iOS testing)
-ngrok http 8000
+Server will be available at `http://localhost:8000`
+
+### Test Endpoints
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Upload PDF
+curl -X POST http://localhost:8000/upload \
+  -F "file=@textbook.pdf"
+
+# Chat (Simple mode)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"student_id": "test123", "message": "Hello", "use_rag": false}'
+
+# Chat (Fast RAG mode)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"student_id": "test123", "message": "Explain derivatives", "use_rag": true, "fast_mode": true}'
+
+# Chat (Full Analysis mode)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"student_id": "test123", "message": "Help with quadratics", "use_rag": true, "fast_mode": false}'
 ```
 
 ## 📁 Project Structure
@@ -144,25 +212,44 @@ ngrok http 8000
 ```
 backend/
 ├── app/
-│   ├── services/          # Business logic layer
-│   ├── routers/           # API endpoints
-│   ├── mcp_servers/       # MCP integration (planned)
-│   └── orchestrator/      # Workflow coordination
+│   ├── agents/
+│   │   ├── chat_graph.py          # LangGraph workflow
+│   │   ├── chat_nodes.py          # Agent nodes
+│   │   ├── nodes.py               # Canvas analysis nodes
+│   │   └── schemas.py             # Pydantic models
+│   ├── services/
+│   │   ├── ai_service.py          # OpenAI wrapper
+│   │   ├── azure_search_service.py # Azure Search client
+│   │   ├── course_rag_service.py  # PDF processing
+│   │   ├── session_manager.py     # Canvas sessions
+│   │   └── vision.py              # Image analysis
+│   ├── routers/
+│   │   ├── chat.py                # Three-mode chat endpoint
+│   │   ├── upload.py              # PDF/image upload
+│   │   ├── regions.py             # Canvas analysis
+│   │   ├── canvas.py              # Canvas endpoints
+│   │   └── get_documents.py       # Document listing
+│   ├── core/
+│   │   ├── config.py              # Settings
+│   │   ├── logger.py              # Logging
+│   │   └── logging_context.py     # Request ID tracking
+│   └── main.py                    # FastAPI app
 ├── tests/
-├── prompts/               # AI prompt engineering
+│   └── test_azure_blob.py         # CourseRAGService tests
 └── requirements.txt
 ```
 
 ## 🎓 Skills Demonstrated
 
-- **API Design**: RESTful endpoints, multipart form data handling
-- **Computer Vision**: Image processing, coordinate systems, region detection
-- **AI Integration**: Prompt engineering, OpenAI Vision API
-- **Software Architecture**: Layered services, separation of concerns
-- **Type Safety**: Pydantic schemas, Python type hints
-- **Async Programming**: FastAPI, concurrent request handling
-- **DevOps**: Environment management, logging, debugging tools
-- **iOS Integration**: Client-server communication, real-time data sync
+- **API Design**: RESTful endpoints, multipart form data, three-mode routing
+- **AI/ML Engineering**: RAG pipelines, vector embeddings, hybrid search
+- **Agent Systems**: LangGraph workflows, intent classification, reasoning
+- **Cloud Services**: Azure Cognitive Search integration, index management
+- **Software Architecture**: Layered services, separation of concerns, async-first design
+- **Type Safety**: Pydantic v2 schemas, Python type hints throughout
+- **Performance Optimization**: Adaptive latency, caching strategies, parallel execution
+- **Document Processing**: PDF parsing, smart chunking, LaTeX preservation
+- **DevOps**: Environment management, structured logging, request tracing
 
 ## 📝 License
 
@@ -170,4 +257,4 @@ Proprietary - All rights reserved
 
 ---
 
-*This is an active development project. For collaboration inquiries, please reach out.*
+*Built with FastAPI, Azure Cognitive Search, LangGraph, and OpenAI*

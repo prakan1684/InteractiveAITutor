@@ -5,7 +5,7 @@ from app.core.logger import get_logger
 from typing import List, Dict, Optional, Literal, Any
 from pydantic import BaseModel
 logger = get_logger(__name__)
-client = openai.OpenAI(api_key=settings.openai_api_key)
+client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
 
 class CompletionRequest(BaseModel):
     messages: List[Dict[str, str]]
