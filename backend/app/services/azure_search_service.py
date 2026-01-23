@@ -44,6 +44,7 @@ class AzureSearchService:
     def _ensure_indexes(self):
         self._create_canvas_sessions_index()
         self._create_course_materials_index()
+        self._create_chat_history_index()
     
 
     def _create_canvas_sessions_index(self):
@@ -177,6 +178,72 @@ class AzureSearchService:
             logger.error(f"Error getting embedding: {e}")
             raise
     
+    def _create_chat_history_index(self):
+        """
+        Create index for storing conversation history
+        """
+
+        index_name = "chat-history"
+        
+
+        try:
+            self.index_client.get_index(index_name)
+            logger.info(f"Index {index_name} already exists")
+            return
+        except:
+            logger.info(f"Index {index_name} does not exist, creating...")
+
+        
+        fields = [
+            SimpleField(
+                name="id",
+                type=SearchFieldDataType.String,
+                key=True
+            ),
+            SimpleField(
+                name="conversation_id",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                sortable=True
+            ),
+            SimpleField(
+                name="student_id",
+                type=SearchFieldDataType.String,
+                filterable=True
+            ),
+            SimpleField(
+                name="role",  # 'user' or 'assistant'
+                type=SearchFieldDataType.String,
+                filterable=True
+            ),
+            SearchableField(
+                name="content",
+                type=SearchFieldDataType.String
+            ),
+            SimpleField(
+                name="timestamp",
+                type=SearchFieldDataType.DateTimeOffset,
+                filterable=True,
+                sortable=True
+            ),
+            SimpleField(
+                name="mode",  # 'simple', 'fast', 'full'
+                type=SearchFieldDataType.String,
+                filterable=True
+            ),
+            SearchableField(
+                name="metadata",  # JSON string for intent, confidence, etc.
+                type=SearchFieldDataType.String
+            )
+        ]
+    
+        index = SearchIndex(name=index_name, fields=fields)
+        self.index_client.create_index(index)
+        logger.info(f"Created index: {index_name}")
+
+
+
+
     def store_canvas_session(
         self,
         session_id: str,

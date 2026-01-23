@@ -40,12 +40,15 @@ async def regions(
     session_id: str = Form(...),
     student_id: str = Form(...),
  ):
+    logger.info(f"📝 Canvas submission started - session_id={session_id}, student_id={student_id}")
+    
     geometry = json.loads(regions)
     strokes = json.loads(strokes)
 
     canvas_filename= f"canvas_{session_id}.png"
 
     image_bytes = await image.read()
+    logger.info(f"📷 Image received: {len(image_bytes)} bytes")
 
     canvas_url = azure_blob_storage.upload_canvas_image(
         image_data=image_bytes,
@@ -56,6 +59,7 @@ async def regions(
             "timestamp": datetime.now().isoformat()
         }
     )
+    logger.info(f"☁️ Canvas uploaded to Azure: {canvas_filename}")
 
 
 
@@ -80,8 +84,11 @@ async def regions(
             stroke_models.append(Stroke(**s))
         except Exception:
             continue
+    
+    logger.info(f"✏️ Processed {len(stroke_models)} strokes")
 
     clusters, symbol_boxes, stroke_boxes = cluster_strokes(stroke_list)
+    logger.info(f"🔍 Detected {len(symbol_boxes)} symbols from {len(clusters)} clusters")
 
     """
     From this point we have clusters, symbol_boxes, and stroke_boxes
@@ -137,7 +144,7 @@ async def regions(
         session_id=session_id
     )
 
-    logger.info(f"Uploaded sprite sheet: {sprite_filename}")
+    logger.info(f"🖼️ Sprite sheet uploaded: {sprite_filename}")
 
     #upload debug to azure
     debug_buffer = io.BytesIO()
@@ -149,7 +156,7 @@ async def regions(
         filename=debug_filename,
         session_id=session_id
     )
-    logger.info(f"Debug image uploaded to Azure: {debug_url}")
+    logger.info(f"🐛 Debug image uploaded: {debug_filename}")
     
     try:
         state = State(
@@ -160,15 +167,16 @@ async def regions(
             created_at=datetime.now(),
             sprite_sheet_path=sprite_url,
         )
-        logger.info("Invoking graph")
+        logger.info("🤖 Starting AI analysis graph...")
         out_state = GRAPH.invoke(state)
-        logger.info("Graph invoked")
         final_response = out_state.get("final_response")
+        logger.info(f"✅ AI analysis complete - response length: {len(final_response) if final_response else 0} chars")
 
         try:
             symbols = out_state.get("symbols", [])
             flags = out_state.get("flags", {})
-
+            
+            logger.info(f"💾 Storing canvas session: {len(symbols)} symbols detected")
             session_manager.store_canvas_session(
                 session_id=session_id,
                 student_id=student_id,
@@ -176,8 +184,9 @@ async def regions(
                 symbols=symbols,
                 flags=flags
             )
+            logger.info(f"✅ Canvas session stored successfully")
         except Exception as e:
-            logger.error(f"Error storing canvas session: {e}")
+            logger.error(f"❌ Error storing canvas session: {e}")
 
 
 
@@ -185,8 +194,9 @@ async def regions(
         if not isinstance(annotations, list):
             annotations = []
         annotation_status = "ok" if len(annotations) > 0 else "skipped"
-        logger.info(f"Annotation status: {annotation_status}")
+        logger.info(f"📌 Annotations: {len(annotations)} generated, status={annotation_status}")
     except Exception as e:
+        logger.error(f"❌ Canvas analysis failed: {str(e)}")
         return {
             "status": "error",
             "problem_type": None,
@@ -230,12 +240,11 @@ async def regions(
             "agent_flags": dict(out_state.get("flags", {})),
         },
     }
-    logger.info("About to serialize payload")
+    logger.info(f"🎉 Canvas submission complete - returning response")
     try:
         jsonable_encoder(payload)
-        logger.info("response Serialization OK")
-    except:
-        logger.error("response Serialization failed")
+    except Exception as e:
+        logger.error(f"❌ Response serialization failed: {e}")
         raise
     return payload
 

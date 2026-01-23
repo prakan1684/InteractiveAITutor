@@ -34,9 +34,10 @@ class SessionManager:
             symbols (List[Dict]): List of symbols in LAtex
             flags (Dict): The flags for the session
         """
-
+        logger.info(f"📦 Storing canvas session - session_id={session_id}, student_id={student_id}")
         try:
             latex_list = [s.get("latex", "") for s in symbols if s.get("latex", "") != ""]
+            logger.info(f"📐 Extracted {len(latex_list)} LaTeX expressions from {len(symbols)} symbols")
             content = (
                 f"{final_response}\n\n"
                 f"Detected Expressions: {', '.join(latex_list)}\n\n"
@@ -54,7 +55,9 @@ class SessionManager:
             )
 
             if not success:
-                logger.warning("Failed to store canvas session in Azure Search")
+                logger.warning("⚠️ Failed to store canvas session in Azure Search")
+            else:
+                logger.info(f"✅ Canvas session stored in Azure Search")
             
 
             #store in memory cache as well
@@ -74,10 +77,11 @@ class SessionManager:
             self.recent_sessions[student_id].append(session_summary)
             
             self.recent_sessions[student_id] = self.recent_sessions[student_id][-5:]
+            logger.info(f"💾 Cached in memory - {len(self.recent_sessions[student_id])} recent sessions for student")
             
             return True
         except Exception as e:
-            logger.error(f"Error storing canvas session: {e}")
+            logger.error(f"❌ Error storing canvas session: {e}")
             return False
 
     def get_recent_context(self, student_id: str) -> Optional[Dict]:
@@ -87,21 +91,24 @@ class SessionManager:
         Returns:
             Session summary or None
         """
+        logger.info(f"🔍 Searching for recent canvas - student_id={student_id}")
         if student_id not in self.recent_sessions:
+            logger.info(f"ℹ️ No sessions in cache for student")
             return None
         
         sessions = self.recent_sessions[student_id]
         if not sessions:
+            logger.info(f"ℹ️ Empty session list for student")
             return None
         
         latest = sessions[-1]
         age = datetime.now() - latest["timestamp"]
         
         if age > self.cache_ttl:
-            logger.info(f"Recent session expired (age: {age})")
+            logger.info(f"⏰ Recent session expired (age: {age})")
             return None
         
-        logger.info(f"Found recent session (age: {age})")
+        logger.info(f"✅ Found recent session (age: {age}, session_id={latest.get('session_id')})")
         return latest
 
     def search_canvas_history(
@@ -116,6 +123,7 @@ class SessionManager:
         Returns:
             List of relevant sessions with scores
         """
+        logger.info(f"🔎 Searching canvas history - student_id={student_id}, query='{query[:50]}...', top_k={top_k}")
         try:
             results = self.azure_search.search_canvas_sessions(
                 student_id=student_id,
@@ -123,11 +131,11 @@ class SessionManager:
                 top_k=top_k
             )
             
-            logger.info(f"Found {len(results)} historical sessions")
+            logger.info(f"✅ Found {len(results)} historical canvas sessions")
             return results
             
         except Exception as e:
-            logger.error(f"Canvas history search failed: {e}")
+            logger.error(f"❌ Canvas history search failed: {e}")
             return []
 
 

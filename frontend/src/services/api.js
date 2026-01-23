@@ -6,7 +6,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const STUDENT_ID = 'student_' + Math.random().toString(36).substr(2, 9);
 
 export const chatAPI = {
-  sendMessage: async (message, speedMode) => {
+  sendMessage: async (message, speedMode, conversationId = null) => {
     const use_rag = speedMode !== 'simple';
     const fast_mode = speedMode === 'fast';
     
@@ -14,9 +14,25 @@ export const chatAPI = {
       student_id: STUDENT_ID,
       message,
       use_rag,
-      fast_mode
+      fast_mode,
+      conversation_id: conversationId
     });
     
+    return response.data;
+  },
+  
+  getConversations: async () => {
+    const response = await axios.get(`${API_BASE}/conversations/${STUDENT_ID}`);
+    return response.data;
+  },
+  
+  getConversation: async (conversationId) => {
+    const response = await axios.get(`${API_BASE}/conversation/${conversationId}`);
+    return response.data;
+  },
+  
+  deleteConversation: async (conversationId) => {
+    const response = await axios.delete(`${API_BASE}/conversation/${conversationId}`);
     return response.data;
   },
   

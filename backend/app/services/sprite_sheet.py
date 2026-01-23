@@ -5,21 +5,31 @@ from app.services.canvas_context import CanvasContext
 from app.mcp_servers.perception.schemas import Box
 
 def crop_symbol(ctx: CanvasContext, box_norm: Box, pad_px: int) -> Image.Image:
-
     image_width = ctx.image_width
     image_height = ctx.image_height
     image = ctx.image   
     
-
+    # Convert normalized coordinates to pixels
     x_px = int(box_norm.x * image_width)
     y_px = int(box_norm.y * image_height)
     w_px = int(box_norm.w * image_width)
     h_px = int(box_norm.h * image_height)
-
+    
+    # Ensure minimum dimensions (at least 1 pixel)
+    w_px = max(1, w_px)
+    h_px = max(1, h_px)
+    
+    # Calculate crop coordinates with padding
     x1 = max(0, x_px - pad_px)
     y1 = max(0, y_px - pad_px)
     x2 = min(image_width, x_px + w_px + pad_px)
     y2 = min(image_height, y_px + h_px + pad_px)
+    
+    # Final validation: ensure x2 > x1 and y2 > y1
+    if x2 <= x1:
+        x2 = x1 + 1
+    if y2 <= y1:
+        y2 = y1 + 1
     
     return image.crop((x1, y1, x2, y2))
 

@@ -56,17 +56,12 @@ Context needs:
         )
 
         state.intent = result['intent']
-        state.needs_canvas_context = result['needs_canvas_context']
-        state.needs_course_context = result['needs_course_context']
-        state.needs_tools = result['needs_tools']
-
-        state.reasoning_steps.append(
-            f"Intent: {result['intent']} | Canvas: {result['needs_canvas_context']} | "
-            f"Course: {result['needs_course_context']} | Tools: {result['needs_tools']} | "
-            f"Reason: {result['reasoning']}"
-        )
-
-        logger.info("Intent classified: %s", state.intent)
+        state.needs_canvas_context = result.get("needs_canvas_context", False)
+        state.needs_course_context = result.get("needs_course_context", False)
+        state.confidence = result.get("confidence", 0.0)
+        state.reasoning_steps.append(f"Intent: {state.intent} (confidence: {state.confidence:.2f})")
+        
+        logger.info(f"✅ Intent classified: {state.intent} (confidence: {state.confidence:.2f}, canvas: {state.needs_canvas_context}, course: {state.needs_course_context})")
 
         return state
     except Exception as e:
@@ -90,6 +85,7 @@ async def retrieve_context(state: ChatState) -> ChatState:
     - populate context fields in state
 
     """
+    logger.info(f"📚 Retrieving context - canvas: {state.needs_canvas_context}, course: {state.needs_course_context}")
 
     if state.needs_canvas_context:
         canvas_context= []
@@ -117,6 +113,9 @@ async def retrieve_context(state: ChatState) -> ChatState:
         
         if len(canvas_context) == 0:
             state.reasoning_steps.append("No Canvas Context found")
+            logger.info("ℹ️ No canvas context found")
+        else:
+            logger.info(f"✅ Canvas context retrieved: {len(canvas_context)} items")
         
 
         state.canvas_context = canvas_context
@@ -127,7 +126,9 @@ async def retrieve_context(state: ChatState) -> ChatState:
         course_context = course_service.search_materials(state.user_message, top_k=5)
         state.course_context = course_context
         state.reasoning_steps.append(f"Course Context retrieved {len(course_context)} items")
+        logger.info(f"✅ Course context retrieved: {len(course_context)} items")
     
+    logger.info(f"📚 Context retrieval complete - canvas: {len(state.canvas_context)}, course: {len(state.course_context)}")
     return state
 
 
@@ -191,16 +192,28 @@ async def respond(state: ChatState) -> ChatState:
     """
     Generate final response to student 
     """
+    logger.info(f"💭 Generating AI response with {len(state.canvas_context)} canvas + {len(state.course_context)} course contexts")
 
     response_prompt = f"""You are a helpful AI tutor. Answer the student's question using the provided context.
+
 Student Question: {state.user_message}
+
 Canvas History:
 {state.canvas_context if state.canvas_context else "No recent work"}
+
 Course Materials:
 {[c['content'] for c in state.course_context[:3]] if state.course_context else "No materials found"}
+
 Reasoning:
 {chr(10).join(state.reasoning_steps)}
+
 Provide a clear, educational response. If referencing their past work, be specific.
+
+IMPORTANT: When including mathematical equations:
+- Use $...$ for inline math (e.g., $x^2 + y^2 = z^2$)
+- Use $$...$$ for display math on its own line
+- Use proper LaTeX syntax within the delimiters
+- Example: The quadratic formula is $x = \\frac{{-b \\pm \\sqrt{{b^2-4ac}}}}{{2a}}$
 """
     
     try:
@@ -211,6 +224,7 @@ Provide a clear, educational response. If referencing their past work, be specif
         )
 
         state.final_response = response.content
+        logger.info(f"✅ AI response generated: {len(response.content)} chars")
 
         state.follow_up_suggestions = [
             "Would you like me to explain any concept in more detail?",

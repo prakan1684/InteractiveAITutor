@@ -1,5 +1,10 @@
 import React from 'react';
 import { User, Bot, Info } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 const MessageList = ({ messages }) => {
   return (
@@ -12,7 +17,14 @@ const MessageList = ({ messages }) => {
             {msg.type === 'system' && <Info size={20} />}
           </div>
           <div className="message-content">
-            <div className="message-text">{msg.content}</div>
+            <div className="message-text">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath, remarkGfm]}
+                rehypePlugins={[rehypeKatex]}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            </div>
             {msg.metadata && (
               <div className="message-metadata">
                 📊 Intent: {msg.metadata.intent} | 
