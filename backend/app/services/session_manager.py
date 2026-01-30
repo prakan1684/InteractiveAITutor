@@ -21,8 +21,9 @@ class SessionManager:
         session_id:str,
         student_id: str,
         final_response: str,
-        symbols: List[Dict],
+        canvas_analysis: Dict,
         flags: Dict,
+        canvas_image_url: str = None,
     ) -> bool:
         """
         Store a canvas session in the recent sessions cache and Azure Search
@@ -33,57 +34,96 @@ class SessionManager:
             final_response (str): The final response from the AI
             symbols (List[Dict]): List of symbols in LAtex
             flags (Dict): The flags for the session
+            canvas_image_url (str): URL to the canvas image in Azure Blob Storage
         """
+
+
         logger.info(f"📦 Storing canvas session - session_id={session_id}, student_id={student_id}")
+
+
         try:
-            latex_list = [s.get("latex", "") for s in symbols if s.get("latex", "") != ""]
-            logger.info(f"📐 Extracted {len(latex_list)} LaTeX expressions from {len(symbols)} symbols")
+            #extracting data from canvas_analysis 
+            problem_summary = canvas_analysis.get("problem_summary", "")
+            expressions = canvas_analysis.get("expressions_found", [])
+            is_correct = canvas_analysis.get("is_correct")
+
+
+            logger.info(f"Problem Summary: {problem_summary}")
+            logger.info(f"Expressions Found: {expressions}")
+            logger.info(f"Is Correct: {is_correct}")
+
+            #build searchable content
             content = (
                 f"{final_response}\n\n"
-                f"Detected Expressions: {', '.join(latex_list)}\n\n"
-                f"Symbol Count: {len(latex_list)}"
+                f"Problem Summary: {problem_summary}\n\n"
+                f"Expressions Found: {', '.join(expressions)}\n\n"
+                f"Is Correct: {is_correct}"
             )
 
             success = self.azure_search.store_canvas_session(
                 session_id=session_id,
-                student_id= student_id,
+                student_id=student_id,
                 content=content,
-                latex_expressions=latex_list,
+                latex_expressions=expressions,
                 agent_feedback=final_response,
-                symbol_count=len(latex_list),
+                symbol_count=len(expressions),
                 needs_help=flags.get("needs_annotation", False)
             )
-
             if not success:
-                logger.warning("⚠️ Failed to store canvas session in Azure Search")
-            else:
-                logger.info(f"✅ Canvas session stored in Azure Search")
-            
+                logger.error(f"❌ Error storing canvas session in Azure Search")
+                return False
 
-            #store in memory cache as well
 
             session_summary = {
                 "session_id": session_id,
                 "timestamp": datetime.now(),
-                "latex_expressions": latex_list,
+                "problem_summary": problem_summary,
+                "expressions": expressions,
+                "is_correct": is_correct,
                 "agent_feedback": final_response,
-                "symbol_count": len(symbols),
-                "needs_help": flags.get("needs_annotation", False)
+                "canvas_image_url": canvas_image_url,
+                "canvas_analysis": canvas_analysis  # Store full analysis
             }
 
             if student_id not in self.recent_sessions:
                 self.recent_sessions[student_id] = []
             
             self.recent_sessions[student_id].append(session_summary)
-            
             self.recent_sessions[student_id] = self.recent_sessions[student_id][-5:]
             logger.info(f"💾 Cached in memory - {len(self.recent_sessions[student_id])} recent sessions for student")
             
+        
             return True
         except Exception as e:
             logger.error(f"❌ Error storing canvas session: {e}")
             return False
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        
+          
     def get_recent_context(self, student_id: str) -> Optional[Dict]:
         """
         Get most recent canvas session if within TTL (30 min)

@@ -15,10 +15,12 @@ class VisionService:
     def create_file_for_vision(self, image_path:str) -> Optional[str]:
         try:
             if image_path.startswith("http"):
-                #download from azure blbo storage
+                #download from azure blob storage
                 response = requests.get(image_path)
                 response.raise_for_status()
                 file_content = BytesIO(response.content)
+                # Set a name attribute so OpenAI can detect the file type
+                file_content.name = "sprite_sheet.png"
             else:
                 file_content = open(image_path, "rb")
                 

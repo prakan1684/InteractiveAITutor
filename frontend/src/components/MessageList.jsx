@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Bot, Info } from 'lucide-react';
+import { User, Bot, Info, Palette } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -17,6 +17,12 @@ const MessageList = ({ messages }) => {
             {msg.type === 'system' && <Info size={20} />}
           </div>
           <div className="message-content">
+            {msg.metadata && msg.metadata.canvas_context_count > 0 && (
+              <div className="canvas-context-badge">
+                <Palette size={14} />
+                Using your canvas work
+              </div>
+            )}
             <div className="message-text">
               <ReactMarkdown
                 remarkPlugins={[remarkMath, remarkGfm]}

@@ -225,6 +225,77 @@ CONCEPTS:
 Be concise, structured, and clear.
 """
 
+
+FULL_CANVAS_ANALYSIS_PROMPT = """
+You are analyzing a student's handwritten mathematical work on a digital canvas.
+
+DETECTED SYMBOLS (from OCR):
+{symbol_context}
+
+TASK:
+Analyze the complete canvas image to understand the student's mathematical work in context.
+
+1. IDENTIFY EXPRESSIONS: Combine symbols into complete mathematical expressions based on their spatial arrangement
+2. EVALUATE CORRECTNESS: If the student provided an answer, check if it's correct
+3. ASSESS APPROACH: Understand what problem-solving method the student is using
+4. PROVIDE FEEDBACK POINTS: Specific observations about their work
+
+Return STRICT JSON only (no markdown):
+{{
+  "expressions": ["list of complete mathematical expressions found, e.g., '5 + 4', 'x^2 + 2x + 1'"],
+  "evaluation": {{
+    "problem": "the mathematical problem being solved",
+    "student_answer": "answer if student wrote one, otherwise null",
+    "expected_answer": "correct answer to the problem",
+    "is_correct": true/false/null,
+    "explanation": "brief explanation of correctness"
+  }},
+  "problem_type": "arithmetic_addition|algebra|geometry|calculus|other",
+  "student_approach": "brief description of student's method or strategy",
+  "feedback_points": [
+    "specific positive observations",
+    "specific areas for improvement",
+    "suggestions for next steps"
+  ],
+  "complexity_level": "basic|intermediate|advanced"
+}}
+
+Rules:
+- expressions should combine symbols in reading order (left-to-right, top-to-bottom)
+- evaluation.is_correct should be true/false if answer provided, null if no answer
+- feedback_points should be specific and educational, not generic
+- If work is incomplete, note what's missing in feedback_points
+"""
+
+SIMPLE_CANVAS_ANALYSIS_PROMPT = """
+You are analyzing a student's handwritten mathematical work on a digital canvas.
+
+TASK:
+Look at the image and understand what the student is working on.
+{context_hint}
+
+Provide a clear analysis in JSON format:
+{{
+  "problem_summary": "Brief description of what problem they're solving",
+  "expressions_found": ["list of mathematical expressions you can see"],
+  "student_answer": "their answer if they wrote one, otherwise null",
+  "expected_answer": "correct answer to the problem",
+  "is_correct": true/false/null,
+  "work_shown": true/false,
+  "feedback": {{
+    "positive": "What they did well",
+    "improvement": "What could be better",
+    "next_step": "Suggestion for next problem or concept"
+  }}
+}}
+
+Rules:
+- Focus on understanding their mathematical work, not individual symbols
+- If you can't read something clearly, make your best interpretation
+- Be encouraging and educational in feedback
+- is_correct should be true/false if they provided an answer, null otherwise
+"""
+
 def get_vision_prompt(user_query: str = None) -> str:
     if user_query:
         return VISION_ANALYSIS_WITH_QUERY.format(user_query=user_query)

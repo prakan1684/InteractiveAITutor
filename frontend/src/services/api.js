@@ -2,8 +2,8 @@ import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-// Generate unique student ID
-const STUDENT_ID = 'student_' + Math.random().toString(36).substr(2, 9);
+// Use consistent student ID for testing (should match iOS app)
+const STUDENT_ID = 'student_123';
 
 export const chatAPI = {
   sendMessage: async (message, speedMode, conversationId = null) => {

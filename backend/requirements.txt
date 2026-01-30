@@ -38,3 +38,11 @@ azure-identity>=1.15.0
 
 pdfplumber==0.10.3
 tiktoken==0.5.2
+
+
+
+"""
+uvicorn app.main:app --reload --port 8000
+ngrok http 8000
+npm start
+"""

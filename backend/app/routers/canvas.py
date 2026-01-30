@@ -4,6 +4,7 @@ from canvas_analyzer import CanvasAnalyzer
 from pathlib import Path
 import uuid
 from app.core.logger import get_logger
+from app.services.session_manager import session_manager
 
 logger = get_logger(__name__)
 
@@ -89,4 +90,49 @@ async def analyze_canvas(
         return {
             "error": str(e),
             "status": "error"
+        }
+
+
+@router.get("/canvas-sessions/{student_id}")
+async def get_canvas_sessions(student_id: str):
+    """
+    Get recent canvas sessions for a student
+    
+    Args:
+        student_id: The student's ID
+    
+    Returns:
+        List of canvas sessions with metadata
+    """
+    try:
+        logger.info(f"📋 Fetching canvas sessions for student: {student_id}")
+        
+        # Get from in-memory cache
+        sessions = session_manager.recent_sessions.get(student_id, [])
+        
+        # Format for frontend
+        formatted_sessions = []
+        for session in sessions:
+            formatted_sessions.append({
+                "session_id": session.get("session_id"),
+                "timestamp": session.get("timestamp").isoformat() if session.get("timestamp") else None,
+                "latex_expressions": session.get("latex_expressions", []),
+                "symbol_count": session.get("symbol_count", 0),
+                "canvas_image_url": session.get("canvas_image_url"),
+                "agent_feedback": session.get("agent_feedback", "")
+            })
+        
+        logger.info(f"✅ Found {len(formatted_sessions)} canvas sessions")
+        return {
+            "status": "success",
+            "sessions": formatted_sessions,
+            "count": len(formatted_sessions)
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error fetching canvas sessions: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "sessions": []
         }

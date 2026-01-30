@@ -137,34 +137,54 @@ async def reason(state: ChatState) -> ChatState:
     Reasons about the users question and retrieved context
     """
 
-    #build context summary
-    context_summary = []
-
+    # Extract canvas work details
+    canvas_details = "No canvas work available"
     if state.canvas_context:
-        context_summary.append(f"Context from Canvas: {len(state.canvas_context)} items")
-    if state.course_context:
-        context_summary.append(f"Context from Course: {len(state.course_context)} items")
+        canvas_items = []
+        for ctx in state.canvas_context:
+            data = ctx.get("data", {})
+
+            problem = data.get("problem_summary", "")
+            expressions = data.get("expressions", [])
+            is_correct = data.get("is_correct")
+        
+            # Fallback to old format (latex_expressions) for historical sessions
+            if not expressions:
+                expressions = data.get("latex_expressions", [])
+        
+            if problem:
+                canvas_items.append(f"Problem: {problem}")
+            if expressions:
+                canvas_items.append(f"Expressions: {', '.join(expressions)}")
+            if is_correct is not None:
+                canvas_items.append(f"Correct: {is_correct}")
     
+        if canvas_items:
+            canvas_details = "; ".join(canvas_items)
+
+
+
+
+    # Extract course material topics
+    course_topics = "No course materials"
+    if state.course_context:
+        topics = [c.get('content', '')[:150] for c in state.course_context[:2]]
+        course_topics = "; ".join(topics)
 
     reasoning_prompt = f"""You are an AI tutor. Analyze this student question and available context.
 
 Student Question: {state.user_message}
 
-Available Context:
-{chr(10).join(context_summary)}
+Canvas Work: {canvas_details}
 
-Canvas Context:
-{state.canvas_context[:2] if state.canvas_context else "None"}
+Course Materials: {course_topics}
 
-Course Materials:
-{[c['content'][:200] for c in state.course_context[:2]] if state.course_context else "None"}
-
-Respond with a JSON object in this exact format:
+Analyze and respond with a JSON object:
 {{
-  "key_concepts": ["concept1", "concept2"],
-  "knowledge_level": "beginner",
-  "approach": "brief description of best teaching approach",
-  "confidence": 0.85
+  "key_concepts": ["list of 1-3 key concepts involved"],
+  "knowledge_level": "beginner" | "intermediate" | "advanced",
+  "approach": "how to best help this student (e.g., 'review their work', 'explain concept', 'provide practice')",
+  "confidence": 0.0-1.0
 }}
 """
     try:
@@ -178,7 +198,10 @@ Respond with a JSON object in this exact format:
         import json
         reasoning = json.loads(response.content)
 
-        state.reasoning_steps.append(f"Reasoning: {reasoning.get('key_concepts', 'N/A')}")
+        key_concepts = reasoning.get('key_concepts', [])
+        approach = reasoning.get('approach', 'general guidance')
+        state.reasoning_steps.append(f"Key concepts: {', '.join(key_concepts)}")
+        state.reasoning_steps.append(f"Teaching approach: {approach}")
         state.confidence = reasoning.get('confidence', 0.0)
     except Exception as e:
         logger.error("Error reasoning: %s", e)
@@ -194,26 +217,57 @@ async def respond(state: ChatState) -> ChatState:
     """
     logger.info(f"💭 Generating AI response with {len(state.canvas_context)} canvas + {len(state.course_context)} course contexts")
 
-    response_prompt = f"""You are a helpful AI tutor. Answer the student's question using the provided context.
+    # Format canvas context to show extracted work clearly
+    canvas_summary = "No recent canvas work available."
+    if state.canvas_context:
+        canvas_parts = []
+        for ctx in state.canvas_context:
+            data = ctx.get("data", {})
+            latex_expressions = data.get("latex_expressions", [])
+            symbol_count = data.get("symbol_count", 0)
+            session_id = data.get("session_id", "unknown")
+            
+            if latex_expressions:
+                expressions_str = ", ".join(latex_expressions)
+                canvas_parts.append(f"- Student wrote: {expressions_str} ({symbol_count} symbols)")
+            else:
+                canvas_parts.append(f"- Student submitted canvas work (session {session_id[:8]}...) but symbols were not fully recognized")
+        
+        canvas_summary = "\n".join(canvas_parts)
+    
+    # Format course materials
+    course_summary = "No course materials found."
+    if state.course_context:
+        course_parts = [c.get('content', '')[:300] for c in state.course_context[:3]]
+        course_summary = "\n\n".join(course_parts)
 
-Student Question: {state.user_message}
+    response_prompt = f"""You are Pocket Professor, a warm and supportive AI tutor helping a student learn.
 
-Canvas History:
-{state.canvas_context if state.canvas_context else "No recent work"}
+Student Question: "{state.user_message}"
 
-Course Materials:
-{[c['content'] for c in state.course_context[:3]] if state.course_context else "No materials found"}
+=== STUDENT'S RECENT CANVAS WORK ===
+{canvas_summary}
 
-Reasoning:
+=== RELEVANT COURSE MATERIALS ===
+{course_summary}
+
+=== REASONING CONTEXT ===
 {chr(10).join(state.reasoning_steps)}
 
-Provide a clear, educational response. If referencing their past work, be specific.
+INSTRUCTIONS:
+1. If the student wrote mathematical expressions on their canvas, reference them specifically
+2. Evaluate correctness: If they wrote something like "3 + 3", acknowledge it and gently guide them
+3. Be encouraging and specific - avoid generic responses
+4. If asking about their work, provide actionable feedback
+5. Keep responses concise but educational (2-4 paragraphs max)
+6. Use a warm, supportive tone appropriate for students
 
-IMPORTANT: When including mathematical equations:
-- Use $...$ for inline math (e.g., $x^2 + y^2 = z^2$)
-- Use $$...$$ for display math on its own line
-- Use proper LaTeX syntax within the delimiters
-- Example: The quadratic formula is $x = \\frac{{-b \\pm \\sqrt{{b^2-4ac}}}}{{2a}}$
+MATH FORMATTING:
+- Use $...$ for inline math (e.g., $3 + 3 = 6$)
+- Use $$...$$ for display equations on their own line
+- Example: The sum is $3 + 3 = 6$
+
+Provide your response now:
 """
     
     try:
@@ -226,11 +280,23 @@ IMPORTANT: When including mathematical equations:
         state.final_response = response.content
         logger.info(f"✅ AI response generated: {len(response.content)} chars")
 
-        state.follow_up_suggestions = [
-            "Would you like me to explain any concept in more detail?",
-            "Do you want to see similar problems?",
-            "Should I review your previous work?"
-        ]
+        # Generate contextual follow-up suggestions
+        suggestions = []
+        
+        if state.canvas_context:
+            # Student has canvas work - suggest practice or next steps
+            suggestions.append("Would you like to try a similar problem?")
+            suggestions.append("Should I explain any part in more detail?")
+        else:
+            # No canvas work - suggest general help
+            suggestions.append("Would you like me to explain this concept?")
+            suggestions.append("Do you want to see an example problem?")
+        
+        # Always offer to review previous work if available
+        if state.canvas_context or state.course_context:
+            suggestions.append("Want to review related material?")
+        
+        state.follow_up_suggestions = suggestions[:3]  # Keep max 3 suggestions
 
     except Exception as e:
         logger.error("Error responding: %s", e)

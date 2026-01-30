@@ -4,6 +4,7 @@ import ChatInterface from './components/ChatInterface';
 import ModeSelector from './components/ModeSelector';
 import FileUpload from './components/FileUpload';
 import ConversationSidebar from './components/ConversationSidebar';
+import CanvasGallery from './components/CanvasGallery';
 
 function App() {
   const [speedMode, setSpeedMode] = useState('fast');
@@ -53,6 +54,7 @@ function App() {
               onModeChange={handleModeChange} 
             />
             <FileUpload onUploadSuccess={handleUploadSuccess} />
+            <CanvasGallery />
           </aside>
           
           <main className="chat-container">

@@ -173,18 +173,24 @@ async def regions(
         logger.info(f"✅ AI analysis complete - response length: {len(final_response) if final_response else 0} chars")
 
         try:
-            symbols = out_state.get("symbols", [])
+            canvas_analysis = out_state.get("canvas_analysis", {})
             flags = out_state.get("flags", {})
             
-            logger.info(f"💾 Storing canvas session: {len(symbols)} symbols detected")
+
+
+            problem_summary = canvas_analysis.get("problem_summary", "")
+            expressions = canvas_analysis.get("expressions_found", [])
+            logger.info(f"💾 Storing canvas session: {problem_summary}")
+            logger.info(f"📐 Expressions found: {expressions}")
+
             session_manager.store_canvas_session(
-                session_id=session_id,
-                student_id=student_id,
-                final_response=final_response,
-                symbols=symbols,
-                flags=flags
+                session_id = session_id,
+                student_id = student_id,
+                final_response = final_response,
+                canvas_analysis = canvas_analysis,
+                flags = flags,
+                canvas_image_url = canvas_url
             )
-            logger.info(f"✅ Canvas session stored successfully")
         except Exception as e:
             logger.error(f"❌ Error storing canvas session: {e}")
 

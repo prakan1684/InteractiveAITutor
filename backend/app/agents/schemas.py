@@ -37,6 +37,7 @@ class State(BaseModel):
 
     perception: Optional[PerceptionState] = None
     understanding: Optional[Dict[str, Any]] = None
+    canvas_analysis: Optional[Dict[str, Any]] = None
     plan: Optional[Dict[str, Any]] = None
     annotations: List[Dict[str, Any]] = Field(default_factory=list)
     final_response: Optional[str] = None

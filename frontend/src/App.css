@@ -631,6 +631,222 @@ body {
   cursor: not-allowed;
 }
 
+/* Canvas Gallery Styles */
+.canvas-gallery {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.canvas-gallery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.canvas-gallery-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  color: #2c3e50;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+  opacity: 0.6;
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.canvas-loading,
+.canvas-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #7f8c8d;
+}
+
+.canvas-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-empty p {
+  margin: 10px 0 5px 0;
+  font-weight: 500;
+}
+
+.canvas-empty small {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.canvas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.canvas-card {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.canvas-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.canvas-thumbnail {
+  width: 100%;
+  height: 120px;
+  position: relative;
+  background: #ecf0f1;
+  overflow: hidden;
+}
+
+.canvas-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.canvas-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bdc3c7;
+}
+
+.canvas-info {
+  padding: 10px;
+}
+
+.canvas-symbols {
+  font-size: 0.85em;
+  color: #2c3e50;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.canvas-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75em;
+  color: #95a5a6;
+}
+
+/* Canvas Lightbox */
+.canvas-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.lightbox-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow: auto;
+  position: relative;
+  padding: 20px;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.lightbox-close:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.lightbox-image {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.lightbox-details {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.lightbox-details h4 {
+  margin-bottom: 10px;
+  color: #2c3e50;
+}
+
+.lightbox-details p {
+  margin: 8px 0;
+  color: #34495e;
+  font-size: 0.95em;
+}
+
+.lightbox-details strong {
+  color: #2c3e50;
+}
+
+/* Canvas Context Badge in Messages */
+.canvas-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
 @media (max-width: 768px) {
   .main-container {
     grid-template-columns: 1fr;
@@ -640,5 +856,14 @@ body {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid #eee;
+  }
+  
+  .canvas-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+  
+  .canvas-thumbnail {
+    height: 100px;
   }
 }

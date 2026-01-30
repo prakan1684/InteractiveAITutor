@@ -8,12 +8,25 @@ def crop_symbol(ctx: CanvasContext, box_norm: Box, pad_px: int) -> Image.Image:
     image_width = ctx.image_width
     image_height = ctx.image_height
     image = ctx.image   
-    
-    # Convert normalized coordinates to pixels
-    x_px = int(box_norm.x * image_width)
-    y_px = int(box_norm.y * image_height)
-    w_px = int(box_norm.w * image_width)
-    h_px = int(box_norm.h * image_height)
+
+    is_pixel_box = (
+        box_norm.x > 1.0
+        or box_norm.y >1.0
+        or box_norm.w > 1.0
+        or box_norm.h > 1.0
+    )
+
+    if is_pixel_box:
+        x_px = int(box_norm.x)
+        y_px = int(box_norm.y)
+        w_px = int(box_norm.w)
+        h_px = int(box_norm.h)
+    else:
+        x_px = int(box_norm.x * image_width)
+        y_px = int(box_norm.y * image_height)
+        w_px = int(box_norm.w * image_width)
+        h_px = int(box_norm.h * image_height)
+
     
     # Ensure minimum dimensions (at least 1 pixel)
     w_px = max(1, w_px)
@@ -27,9 +40,9 @@ def crop_symbol(ctx: CanvasContext, box_norm: Box, pad_px: int) -> Image.Image:
     
     # Final validation: ensure x2 > x1 and y2 > y1
     if x2 <= x1:
-        x2 = x1 + 1
+        x2 = min(image_width, x1 + 1)
     if y2 <= y1:
-        y2 = y1 + 1
+        y2 = min(image_height, y1 + 1)
     
     return image.crop((x1, y1, x2, y2))
 

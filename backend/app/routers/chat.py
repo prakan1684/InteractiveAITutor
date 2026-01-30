@@ -47,12 +47,12 @@ async def chat(request: ChatRequest):
         history = conversation_manager.get_conversation_history(conversation_id, limit=10)
         
         # Store user message
-        logger.info(f"💾 Storing conversation message...")
-        conversation_id = conversation_manager.store_message(
-            student_id=request.student_id,
+        logger.info(f"💾 Storing user message...")
+        conversation_manager.store_message(
             conversation_id=conversation_id,
-            user_message=request.message,
-            ai_response="",
+            student_id=request.student_id,
+            role="user",
+            content=request.message,
             mode="simple" if not request.use_rag else ("fast" if request.fast_mode else "full"),
             metadata={
                 "intent": "unknown",
@@ -61,7 +61,7 @@ async def chat(request: ChatRequest):
                 "canvas_context_count": 0
             }
         )
-        logger.info(f"✅ Message stored - conversation_id={conversation_id}")
+        logger.info(f"✅ User message stored - conversation_id={conversation_id}")
         
         # Route to appropriate chat mode
         if not request.use_rag:
@@ -72,12 +72,12 @@ async def chat(request: ChatRequest):
             response_obj = await _full_chat(request, history)
         
         # Store assistant response
-        logger.info(f"💾 Storing conversation response...")
-        conversation_id = conversation_manager.store_message(
-            student_id=request.student_id,
+        logger.info(f"💾 Storing assistant response...")
+        conversation_manager.store_message(
             conversation_id=conversation_id,
-            user_message="",
-            ai_response=response_obj.response,
+            student_id=request.student_id,
+            role="assistant",
+            content=response_obj.response,
             mode="simple" if not request.use_rag else ("fast" if request.fast_mode else "full"),
             metadata={
                 "intent": response_obj.intent,
@@ -86,7 +86,7 @@ async def chat(request: ChatRequest):
                 "canvas_context_count": response_obj.canvas_context_count
             }
         )
-        logger.info(f"✅ Response stored - conversation_id={conversation_id}")
+        logger.info(f"✅ Assistant response stored - conversation_id={conversation_id}")
         
         # Set conversation_id and return
         response_obj.conversation_id = conversation_id
