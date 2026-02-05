@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.agents.schemas import ChatState
-from app.agents.chat_graph import chat_graph
+
 from app.services.conversation_manager import conversation_manager
 from typing import Optional, Dict
 import uuid

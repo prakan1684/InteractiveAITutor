@@ -58,9 +58,10 @@ class AzureSearchService:
         except:
             logger.info(f"Index {index_name} does not exist, creating...")
 
-        # we will have id, student_id, content, content_vector
+        # Rich structured fields for precise querying and analytics
         
         fields = [
+            # Identity fields
             SimpleField(
                 name="id",
                 type=SearchFieldDataType.String,
@@ -76,6 +77,14 @@ class AzureSearchService:
                 type=SearchFieldDataType.String,
                 filterable=True
             ),
+            SimpleField(
+                name="timestamp",
+                type=SearchFieldDataType.DateTimeOffset,
+                filterable=True,
+                sortable=True
+            ),
+            
+            # Content fields (searchable text)
             SearchableField(
                 name="content",
                 type=SearchFieldDataType.String,
@@ -88,31 +97,107 @@ class AzureSearchService:
                 name="agent_feedback",
                 type=SearchFieldDataType.String,
             ),
+            
+            # Problem classification (filterable for precise queries)
             SimpleField(
-                name="timestamp",
-                type=SearchFieldDataType.DateTimeOffset,
+                name="problem_type",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            SimpleField(
+                name="topic",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            SimpleField(
+                name="subtopic",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            SimpleField(
+                name="difficulty_level",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            
+            # Answer data
+            SearchableField(
+                name="student_answer",
+                type=SearchFieldDataType.String,
+            ),
+            SearchableField(
+                name="expected_answer",
+                type=SearchFieldDataType.String,
+            ),
+            SimpleField(
+                name="is_correct",
+                type=SearchFieldDataType.Boolean,
+                filterable=True,
+                facetable=True
+            ),
+            
+            # Work quality metrics
+            SimpleField(
+                name="shows_work",
+                type=SearchFieldDataType.Boolean,
+                filterable=True
+            ),
+            SimpleField(
+                name="work_clarity",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            SimpleField(
+                name="num_steps_shown",
+                type=SearchFieldDataType.Int32,
+                filterable=True,
+                sortable=True
+            ),
+            
+            # Metadata
+            SimpleField(
+                name="confidence",
+                type=SearchFieldDataType.Double,
+                filterable=True,
+                sortable=True
+            ),
+            SimpleField(
+                name="visual_quality",
+                type=SearchFieldDataType.String,
+                filterable=True,
+                facetable=True
+            ),
+            SimpleField(
+                name="num_regions",
+                type=SearchFieldDataType.Int32,
                 filterable=True,
                 sortable=True
             ),
             SimpleField(
                 name="symbol_count",
-                type=SearchFieldDataType.Int32
+                type=SearchFieldDataType.Int32,
+                filterable=True,
+                sortable=True
             ),
             SimpleField(
                 name="needs_help",
                 type=SearchFieldDataType.Boolean,
                 filterable=True
             ),
+            
+            # Vector search field
             SearchField(
                 name="content_vector",
                 type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
                 searchable=True,
                 vector_search_dimensions=1536,
                 vector_search_profile_name="vector-profile",
-                
             ),
-
-
         ]
 
         vector_search = VectorSearch(
@@ -250,11 +335,25 @@ class AzureSearchService:
         student_id: str,
         content: str,
         latex_expressions: List[str],
-        agent_feedback:str,
-        symbol_count:int,
-        needs_help:bool
+        agent_feedback: str,
+        # Rich structured fields from Vision Agent
+        problem_type: str,
+        topic: str,
+        subtopic: str,
+        difficulty_level: str,
+        student_answer: str = None,
+        expected_answer: str = None,
+        is_correct: bool = None,
+        shows_work: bool = False,
+        work_clarity: str = "unclear",
+        num_steps_shown: int = 0,
+        confidence: float = 0.0,
+        visual_quality: str = "unknown",
+        num_regions: int = 0,
+        symbol_count: int = 0,
+        needs_help: bool = False
     ) -> bool:
-        """ store canvas session in azure search"""
+        """Store canvas session with rich structured data in Azure Search"""
         try:
             client = SearchClient(
                 endpoint = self.endpoint,
@@ -264,23 +363,49 @@ class AzureSearchService:
             embedding = self._get_embedding(content)
 
             document = {
+                # Identity
                 "id": f"{student_id}_{session_id}",
-                "session_id":session_id,
-                "student_id":student_id,
+                "session_id": session_id,
+                "student_id": student_id,
+                "timestamp": datetime.now(),
+                
+                # Content (searchable)
                 "content": content,
-                "latex_expressions": ", ".join(latex_expressions),
+                "latex_expressions": ", ".join(latex_expressions) if latex_expressions else "",
                 "agent_feedback": agent_feedback,
+                
+                # Problem classification (filterable)
+                "problem_type": problem_type,
+                "topic": topic,
+                "subtopic": subtopic,
+                "difficulty_level": difficulty_level,
+                
+                # Answer data
+                "student_answer": student_answer or "",
+                "expected_answer": expected_answer or "",
+                "is_correct": is_correct if is_correct is not None else False,
+                
+                # Work quality
+                "shows_work": shows_work,
+                "work_clarity": work_clarity,
+                "num_steps_shown": num_steps_shown,
+                
+                # Metadata
+                "confidence": confidence,
+                "visual_quality": visual_quality,
+                "num_regions": num_regions,
                 "symbol_count": symbol_count,
                 "needs_help": needs_help,
+                
+                # Vector search
                 "content_vector": embedding,
-                "timestamp": datetime.now()
             }
 
             client.upload_documents(documents=[document])
-            logger.info(f"Stored canvas session: {session_id}")
+            logger.info(f"✅ Stored canvas session: {session_id} | Type: {problem_type} | Topic: {topic}")
             return True
         except Exception as e:
-            logger.error(f"Error storing canvas session: {e}")
+            logger.error(f"❌ Error storing canvas session: {e}")
             return False
     
     def search_canvas_sessions(

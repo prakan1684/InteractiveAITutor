@@ -54,19 +54,24 @@ class AIService:
         """
 
         try:
+            # Use provided model or default, fallback to gpt-4o-mini if neither
+            model_to_use = model or self.model or "gpt-4o-mini"
+            
             kwargs = {
-                "model": model or self.model,
+                "model": model_to_use,
                 "messages": messages,
-                "temperature": temperature or self.temperature,
-                "max_tokens": max_tokens or self.max_tokens,
+                "temperature": temperature if temperature is not None else (self.temperature if self.temperature is not None else 0.7),
             }
-
+            
+            # Only add max_tokens if specified
+            if max_tokens or self.max_tokens:
+                kwargs["max_tokens"] = max_tokens or self.max_tokens
 
             if response_format:
                 kwargs["response_format"] = response_format
 
-                logger.info("Using response format: %s", response_format)
-                logger.info(f"LLM call: model={kwargs['model']}, temperature={kwargs['temperature']}")
+            logger.info("Using response format: %s", response_format)
+            logger.info(f"LLM call: model={kwargs['model']}, temperature={kwargs['temperature']}")
 
             response = await self.client.chat.completions.create(**kwargs)
             result = CompletionResponse(

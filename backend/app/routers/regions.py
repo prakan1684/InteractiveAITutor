@@ -16,14 +16,14 @@ import uuid
 from app.services.session_manager import session_manager
 from datetime import datetime
 
-from app.agents.graph import build_graph
+
 from app.agents.schemas import State
 from app.mcp_servers.perception.schemas import Box, Stroke
 from app.services.clustering import cluster_strokes
 from app.services.canvas_context import CanvasContext
 from app.services.sprite_sheet import build_sprite_sheet_from_ctx
 
-GRAPH = build_graph()
+
 
 logger = get_logger(__name__)
 

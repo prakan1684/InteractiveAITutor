@@ -23,7 +23,7 @@ from app.core.logging_config import setup_logging
 from app.core.logger import get_logger
 from app.core.config import settings
 
-from .routers import canvas, upload, chat, get_documents, regions
+from .routers import canvas, upload, chat, get_documents, regions, steps
 
 setup_logging(level="INFO")
 
@@ -48,11 +48,12 @@ app = FastAPI(
     version = "0.0.1"
 )
 
-app.include_router(canvas.router)
+#app.include_router(canvas.router)
 app.include_router(upload.router)
-app.include_router(chat.router)
+#app.include_router(chat.router)
 app.include_router(get_documents.router)
-app.include_router(regions.router)
+#app.include_router(regions.router)
+app.include_router(steps.router)
 
 
 @app.middleware("http")

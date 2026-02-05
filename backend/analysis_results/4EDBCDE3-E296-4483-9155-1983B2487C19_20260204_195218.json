@@ -1,0 +1,312 @@
+{
+  "session_id": "4EDBCDE3-E296-4483-9155-1983B2487C19",
+  "student_id": "21E80EDF-F849-4FBA-9AD9-BB84280C2CE7",
+  "timestamp": "2026-02-04T19:52:18.922363",
+  "vision_analysis": {
+    "full_analysis": {},
+    "step_details": {},
+    "steps_metadata": []
+  },
+  "feedback_analysis": {
+    "evaluation": {
+      "overall_correctness": "incorrect",
+      "correct_steps": 0,
+      "total_steps": 2,
+      "has_errors": true,
+      "error_types": [
+        "calculation"
+      ],
+      "misconceptions": [
+        "The student miscalculated the sum of 4 and 5, confusing the total with a larger number."
+      ],
+      "key_concepts": [
+        "addition",
+        "basic arithmetic"
+      ]
+    },
+    "feedback_message": "It's great to see you working on addition! However, there's a small mistake in your calculation. Remember, when you add 4 and 5 together, you are combining the two numbers to find the total. Let's take another look at that problem together!",
+    "step_feedback": [
+      {
+        "step_id": "1",
+        "order": 0,
+        "message": "You correctly set up the addition problem, but the answer needs to be re-evaluated. Try counting up from 4 five times to see what you get.",
+        "type": "error"
+      },
+      {
+        "step_id": "2",
+        "order": 1,
+        "message": "It looks like you didn't present any additional content related to the problem. Remember, it's always helpful to show your thought process or any steps you took to reach your answer.",
+        "type": "suggestion"
+      }
+    ],
+    "hints": [
+      "Try breaking down the problem: What is 4 plus 1? Then, what is that result plus 4 more?",
+      "You can use your fingers or draw dots to visualize the numbers you're adding."
+    ],
+    "encouragement": "Keep practicing your addition skills! You're making progress, and with a little more practice, you'll get even better at it!"
+  },
+  "annotations": [
+    {
+      "step_id": "BF44EB77-4ABD-4724-850B-0EE9681784FB",
+      "order": 0,
+      "type": "success",
+      "bbox": {
+        "x": 867,
+        "y": 359,
+        "height": 38,
+        "width": 63
+      },
+      "color": "green",
+      "message": "\u2713",
+      "severity": "low"
+    },
+    {
+      "step_id": "9E24D1C1-3C1B-4531-8D4C-79A99A142313",
+      "order": 1,
+      "type": "success",
+      "bbox": {
+        "y": 59,
+        "width": 197,
+        "height": 66,
+        "x": 193
+      },
+      "color": "green",
+      "message": "\u2713",
+      "severity": "low"
+    }
+  ],
+  "trace": {
+    "intent": "canvas_analysis",
+    "workflow_type": "simplified",
+    "steps": [
+      {
+        "agent_name": "VisionAgent",
+        "thought": "Analyzing canvas with step context",
+        "timestamp": "2026-02-04 19:51:56.796956"
+      },
+      {
+        "agent_name": "VisionAgent",
+        "thought": "Analyzed full canvas: The student attempts to solve an addition problem but makes an error in the result, writing 4 + 5 = 10 instead of 9.",
+        "observation": "Detected 2 steps, 1 need detail",
+        "timestamp": "2026-02-04 19:52:07.939863"
+      },
+      {
+        "agent_name": "FeedbackAgent",
+        "thought": "Starting evaluation and feedback generation",
+        "timestamp": "2026-02-04 19:52:07.940264"
+      },
+      {
+        "agent_name": "FeedbackAgent",
+        "thought": "Generated feedback and evaluation",
+        "observation": "Generated feedback with 2 annotations",
+        "timestamp": "2026-02-04 19:52:18.922125"
+      }
+    ],
+    "agents_completed": [
+      "FeedbackAgent"
+    ]
+  },
+  "raw": {
+    "vision_output": {},
+    "feedback_output": {
+      "evaluation": {
+        "overall_correctness": "incorrect",
+        "correct_steps": 0,
+        "total_steps": 2,
+        "has_errors": true,
+        "error_types": [
+          "calculation"
+        ],
+        "misconceptions": [
+          "The student miscalculated the sum of 4 and 5, confusing the total with a larger number."
+        ],
+        "key_concepts": [
+          "addition",
+          "basic arithmetic"
+        ]
+      },
+      "feedback": "It's great to see you working on addition! However, there's a small mistake in your calculation. Remember, when you add 4 and 5 together, you are combining the two numbers to find the total. Let's take another look at that problem together!",
+      "step_feedback": [
+        {
+          "step_id": "1",
+          "order": 0,
+          "message": "You correctly set up the addition problem, but the answer needs to be re-evaluated. Try counting up from 4 five times to see what you get.",
+          "type": "error"
+        },
+        {
+          "step_id": "2",
+          "order": 1,
+          "message": "It looks like you didn't present any additional content related to the problem. Remember, it's always helpful to show your thought process or any steps you took to reach your answer.",
+          "type": "suggestion"
+        }
+      ],
+      "hints": [
+        "Try breaking down the problem: What is 4 plus 1? Then, what is that result plus 4 more?",
+        "You can use your fingers or draw dots to visualize the numbers you're adding."
+      ],
+      "encouragement": "Keep practicing your addition skills! You're making progress, and with a little more practice, you'll get even better at it!",
+      "annotations": [
+        {
+          "step_id": "BF44EB77-4ABD-4724-850B-0EE9681784FB",
+          "order": 0,
+          "type": "success",
+          "bbox": {
+            "x": 867,
+            "y": 359,
+            "height": 38,
+            "width": 63
+          },
+          "color": "green",
+          "message": "\u2713",
+          "severity": "low"
+        },
+        {
+          "step_id": "9E24D1C1-3C1B-4531-8D4C-79A99A142313",
+          "order": 1,
+          "type": "success",
+          "bbox": {
+            "y": 59,
+            "width": 197,
+            "height": 66,
+            "x": 193
+          },
+          "color": "green",
+          "message": "\u2713",
+          "severity": "low"
+        }
+      ]
+    },
+    "full_state": {
+      "feedback_output": {
+        "evaluation": {
+          "overall_correctness": "incorrect",
+          "correct_steps": 0,
+          "total_steps": 2,
+          "has_errors": true,
+          "error_types": [
+            "calculation"
+          ],
+          "misconceptions": [
+            "The student miscalculated the sum of 4 and 5, confusing the total with a larger number."
+          ],
+          "key_concepts": [
+            "addition",
+            "basic arithmetic"
+          ]
+        },
+        "feedback": "It's great to see you working on addition! However, there's a small mistake in your calculation. Remember, when you add 4 and 5 together, you are combining the two numbers to find the total. Let's take another look at that problem together!",
+        "step_feedback": [
+          {
+            "step_id": "1",
+            "order": 0,
+            "message": "You correctly set up the addition problem, but the answer needs to be re-evaluated. Try counting up from 4 five times to see what you get.",
+            "type": "error"
+          },
+          {
+            "step_id": "2",
+            "order": 1,
+            "message": "It looks like you didn't present any additional content related to the problem. Remember, it's always helpful to show your thought process or any steps you took to reach your answer.",
+            "type": "suggestion"
+          }
+        ],
+        "hints": [
+          "Try breaking down the problem: What is 4 plus 1? Then, what is that result plus 4 more?",
+          "You can use your fingers or draw dots to visualize the numbers you're adding."
+        ],
+        "encouragement": "Keep practicing your addition skills! You're making progress, and with a little more practice, you'll get even better at it!",
+        "annotations": [
+          {
+            "step_id": "BF44EB77-4ABD-4724-850B-0EE9681784FB",
+            "order": 0,
+            "type": "success",
+            "bbox": {
+              "x": 867,
+              "y": 359,
+              "height": 38,
+              "width": 63
+            },
+            "color": "green",
+            "message": "\u2713",
+            "severity": "low"
+          },
+          {
+            "step_id": "9E24D1C1-3C1B-4531-8D4C-79A99A142313",
+            "order": 1,
+            "type": "success",
+            "bbox": {
+              "y": 59,
+              "width": 197,
+              "height": 66,
+              "x": 193
+            },
+            "color": "green",
+            "message": "\u2713",
+            "severity": "low"
+          }
+        ]
+      },
+      "final_response": "It's great to see you working on addition! However, there's a small mistake in your calculation. Remember, when you add 4 and 5 together, you are combining the two numbers to find the total. Let's take another look at that problem together!",
+      "annotations": [
+        {
+          "step_id": "BF44EB77-4ABD-4724-850B-0EE9681784FB",
+          "order": 0,
+          "type": "success",
+          "bbox": {
+            "x": 867,
+            "y": 359,
+            "height": 38,
+            "width": 63
+          },
+          "color": "green",
+          "message": "\u2713",
+          "severity": "low"
+        },
+        {
+          "step_id": "9E24D1C1-3C1B-4531-8D4C-79A99A142313",
+          "order": 1,
+          "type": "success",
+          "bbox": {
+            "y": 59,
+            "width": 197,
+            "height": 66,
+            "x": 193
+          },
+          "color": "green",
+          "message": "\u2713",
+          "severity": "low"
+        }
+      ],
+      "trace": {
+        "intent": "canvas_analysis",
+        "workflow_type": "simplified",
+        "steps": [
+          {
+            "agent_name": "VisionAgent",
+            "thought": "Analyzing canvas with step context",
+            "timestamp": "2026-02-04 19:51:56.796956"
+          },
+          {
+            "agent_name": "VisionAgent",
+            "thought": "Analyzed full canvas: The student attempts to solve an addition problem but makes an error in the result, writing 4 + 5 = 10 instead of 9.",
+            "observation": "Detected 2 steps, 1 need detail",
+            "timestamp": "2026-02-04 19:52:07.939863"
+          },
+          {
+            "agent_name": "FeedbackAgent",
+            "thought": "Starting evaluation and feedback generation",
+            "timestamp": "2026-02-04 19:52:07.940264"
+          },
+          {
+            "agent_name": "FeedbackAgent",
+            "thought": "Generated feedback and evaluation",
+            "observation": "Generated feedback with 2 annotations",
+            "timestamp": "2026-02-04 19:52:18.922125"
+          }
+        ],
+        "agents_completed": [
+          "FeedbackAgent"
+        ]
+      }
+    }
+  }
+}

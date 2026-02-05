@@ -26,46 +26,84 @@ class SessionManager:
         canvas_image_url: str = None,
     ) -> bool:
         """
-        Store a canvas session in the recent sessions cache and Azure Search
+        Store a canvas session with rich structured data in Azure Search and memory cache
 
         Args:
             session_id (str): The ID of the session
             student_id (str): The ID of the student
             final_response (str): The final response from the AI
-            symbols (List[Dict]): List of symbols in LAtex
+            canvas_analysis (Dict): Rich structured analysis from Vision Agent
             flags (Dict): The flags for the session
             canvas_image_url (str): URL to the canvas image in Azure Blob Storage
         """
 
-
         logger.info(f"📦 Storing canvas session - session_id={session_id}, student_id={student_id}")
 
-
         try:
-            #extracting data from canvas_analysis 
+            # Extract rich structured data from Vision Agent's analysis
             problem_summary = canvas_analysis.get("problem_summary", "")
             expressions = canvas_analysis.get("expressions_found", [])
+            
+            # Problem classification
+            problem_type = canvas_analysis.get("problem_type", "unknown")
+            topic = canvas_analysis.get("topic", "unknown")
+            subtopic = canvas_analysis.get("subtopic", "unknown")
+            difficulty_level = canvas_analysis.get("difficulty_level", "unknown")
+            
+            # Answer data
+            student_answer = canvas_analysis.get("student_answer")
+            expected_answer = canvas_analysis.get("expected_answer")
             is_correct = canvas_analysis.get("is_correct")
+            
+            # Work quality
+            shows_work = canvas_analysis.get("shows_work", False)
+            work_clarity = canvas_analysis.get("work_clarity", "unclear")
+            num_steps_shown = canvas_analysis.get("num_steps_shown", 0)
+            
+            # Metadata
+            confidence = canvas_analysis.get("confidence", 0.0)
+            visual_quality = canvas_analysis.get("visual_quality", "unknown")
+            num_regions = canvas_analysis.get("num_regions", 0)
 
+            logger.info(f"📊 Analysis: {problem_type} | Topic: {topic} | Difficulty: {difficulty_level}")
+            logger.info(f"✅ Correct: {is_correct} | Confidence: {confidence}")
 
-            logger.info(f"Problem Summary: {problem_summary}")
-            logger.info(f"Expressions Found: {expressions}")
-            logger.info(f"Is Correct: {is_correct}")
-
-            #build searchable content
+            # Build searchable content (for full-text search)
             content = (
                 f"{final_response}\n\n"
-                f"Problem Summary: {problem_summary}\n\n"
-                f"Expressions Found: {', '.join(expressions)}\n\n"
-                f"Is Correct: {is_correct}"
+                f"Problem: {problem_summary}\n"
+                f"Type: {problem_type}\n"
+                f"Topic: {topic} ({subtopic})\n"
+                f"Difficulty: {difficulty_level}\n"
+                f"Expressions: {', '.join(expressions)}\n"
+                f"Student Answer: {student_answer}\n"
+                f"Expected Answer: {expected_answer}\n"
+                f"Correct: {is_correct}\n"
+                f"Shows Work: {shows_work}\n"
+                f"Clarity: {work_clarity}"
             )
 
+            # Store in Azure Search with rich structured fields
             success = self.azure_search.store_canvas_session(
                 session_id=session_id,
                 student_id=student_id,
                 content=content,
                 latex_expressions=expressions,
                 agent_feedback=final_response,
+                # New structured fields
+                problem_type=problem_type,
+                topic=topic,
+                subtopic=subtopic,
+                difficulty_level=difficulty_level,
+                student_answer=student_answer,
+                expected_answer=expected_answer,
+                is_correct=is_correct,
+                shows_work=shows_work,
+                work_clarity=work_clarity,
+                num_steps_shown=num_steps_shown,
+                confidence=confidence,
+                visual_quality=visual_quality,
+                num_regions=num_regions,
                 symbol_count=len(expressions),
                 needs_help=flags.get("needs_annotation", False)
             )
@@ -74,15 +112,32 @@ class SessionManager:
                 return False
 
 
+            # Store rich structured data in memory cache
             session_summary = {
                 "session_id": session_id,
                 "timestamp": datetime.now(),
                 "problem_summary": problem_summary,
                 "expressions": expressions,
+                # Classification
+                "problem_type": problem_type,
+                "topic": topic,
+                "subtopic": subtopic,
+                "difficulty_level": difficulty_level,
+                # Answers
+                "student_answer": student_answer,
+                "expected_answer": expected_answer,
                 "is_correct": is_correct,
+                # Work quality
+                "shows_work": shows_work,
+                "work_clarity": work_clarity,
+                "num_steps_shown": num_steps_shown,
+                # Metadata
+                "confidence": confidence,
+                "visual_quality": visual_quality,
+                "num_regions": num_regions,
                 "agent_feedback": final_response,
                 "canvas_image_url": canvas_image_url,
-                "canvas_analysis": canvas_analysis  # Store full analysis
+                "canvas_analysis": canvas_analysis  # Store full analysis for reference
             }
 
             if student_id not in self.recent_sessions:
