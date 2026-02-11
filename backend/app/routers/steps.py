@@ -1,18 +1,16 @@
-from fastapi import APIRouter, Request
-from app.core.logger import get_logger
 import json
 import uuid
-from fastapi import File, UploadFile
+import traceback
+from fastapi import APIRouter, Request, File, UploadFile
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-from app.agents.nodes import run_canvas_analysis
+from app.core.logger import get_logger
+from app.services.canvas_storage import canvas_storage
 
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-
 
 
 
@@ -33,7 +31,7 @@ async def analyze_steps(request: Request):
 
     """
     try:
-        logger.info(" steps endpoint called")
+        logger.info("/steps called")
         form = await request.form()
 
 
@@ -51,10 +49,7 @@ async def analyze_steps(request: Request):
         strokes_data = json.loads(strokes_json) if strokes_json else {"strokes": []}
 
 
-        logger.info(f"📊 Session: {session_id}, Student: {student_id}")
-        logger.info(f"📐 Canvas dimensions: {image_width}x{image_height}")
-        logger.info(f"📝 Steps count: {len(steps_data.get('steps', []))}")
-        logger.info(f"✏️ Strokes count: {len(strokes_data.get('strokes', []))}")
+        logger.info(f"Session={session_id}, Student={student_id}, Steps={len(steps_data.get('steps', []))}, Canvas={image_width}x{image_height}")
 
 
 
@@ -74,11 +69,12 @@ async def analyze_steps(request: Request):
 
         if full_canvas_file:
             full_canvas_path = steps_dir / "full_canvas.png"
+            content = await full_canvas_file.read()
+            logger.info(f"Canvas image received: {len(content)} bytes")
             with open(full_canvas_path, "wb") as buffer:
-                content = await full_canvas_file.read()
                 buffer.write(content)
-            
-            logger.info(f"Saved full canvas to {full_canvas_path}")
+        else:
+            logger.warning("No 'image' field in form data")
         
 
         #saving the step images
@@ -96,101 +92,44 @@ async def analyze_steps(request: Request):
                     content = await step_image_file.read()
                     buffer.write(content)
                 
-                logger.info(f"Saved step {step_id} image to {step_image_path}")
+                logger.debug(f"Saved step {step_id} image to {step_image_path}")
                 step_image_paths[step_id] = step_image_path
         
-        logger.info(f"Step image paths: {len(step_image_paths)} steps processed")
-
-        # Run simplified canvas analysis (Vision -> Feedback)
-        logger.info("🎨 Starting canvas analysis...")
+        # Store the latest canvas image path — analysis happens on-demand when user asks
+        if full_canvas_path:
+            canvas_storage.store_image(
+                student_id=student_id,
+                image_path=str(full_canvas_path)
+            )
         
-        # Convert step_image_paths to string dict for state
-        step_paths_str = {k: str(v) for k, v in step_image_paths.items()}
+        logger.info(f"Canvas image stored for student={student_id}")
         
-        final_state = await run_canvas_analysis(
-            session_id=session_id,
-            student_id=student_id,
-            full_canvas_path=str(full_canvas_path),
-            canvas_dimensions={"width": image_width, "height": image_height},
-            steps_metadata=steps_data.get("steps", []),
-            step_image_paths=step_paths_str,
-            strokes_data=strokes_data.get("strokes", [])
-        )
-        
-        logger.info("✅ Canvas analysis complete")
-        
-        # Extract results from final state
-        feedback_output = final_state.get("feedback_output", {})
-        annotations = final_state.get("annotations", [])
-        final_response = final_state.get("final_response", "")
-
-        analysis_dir = Path("analysis_results")
-        analysis_dir.mkdir(exist_ok=True)
-        analysis_file = analysis_dir / f"{session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-
-        # Extract detailed analysis from vision and feedback outputs
-        vision_output = final_state.get("vision_output", {})
-        feedback_output = final_state.get("feedback_output", {})
-        
-        analysis_data = {
-            "session_id": session_id,
-            "student_id": student_id,
-            "timestamp": datetime.now().isoformat(),
-            
-            # Vision Analysis Details
-            "vision_analysis": {
-                "full_analysis": vision_output.get("full_analysis", {}),
-                "step_details": vision_output.get("step_details", {}),
-                "steps_metadata": vision_output.get("steps_metadata", [])
-            },
-            
-            # Feedback Analysis Details
-            "feedback_analysis": {
-                "evaluation": feedback_output.get("evaluation", {}),
-                "feedback_message": feedback_output.get("feedback", ""),
-                "step_feedback": feedback_output.get("step_feedback", []),
-                "hints": feedback_output.get("hints", []),
-                "encouragement": feedback_output.get("encouragement", "")
-            },
-            
-            # Annotations for UI
-            "annotations": annotations,
-            
-            # Complete execution trace
-            "trace": final_state.get("trace", {}),
-            
-            # Raw outputs (for debugging)
-            "raw": {
-                "vision_output": vision_output,
-                "feedback_output": feedback_output,
-                "full_state": final_state
-            }
-        }
-
-        with open(analysis_file, "w") as f:
-            json.dump(analysis_data, f, indent=2, default=str)
-        
-        logger.info(f"💾 Saved analysis to {analysis_file}")
-        
+        # Return iOS-compatible response format
         return {
-            "status": "success",
-            "session_id": session_id,
-            "feedback": final_response,
-            "evaluation": feedback_output.get("evaluation", {}),
-            "annotations": annotations,
-            "step_feedback": feedback_output.get("step_feedback", []),
-            "hints": feedback_output.get("hints", []),
-            "encouragement": feedback_output.get("encouragement", ""),
-            "metadata": {
-                "steps_analyzed": len(steps_data.get("steps", [])),
-                "canvas_dimensions": {"width": image_width, "height": image_height}
-            }
+            "status": "ok",
+            "problem_type": None,
+            "context": None,
+            "feedback": None,
+            "annotations": None,
+            "annotation_status": None,
+            "annotation_error": None,
+            "annotation_metadata": None,
+            "error": None
         }
-
+        
+            
+        
     except Exception as e:
-        logger.error(f"Error processing steps: {str(e)}")
+        logger.error(f"Error processing steps: {str(e)}\n{traceback.format_exc()}")
         return {
             "status": "error",
+            "problem_type": None,
+            "context": None,
+            "feedback": None,
+            "annotations": None,
+            "annotation_status": None,
+            "annotation_error": None,
+            "annotation_metadata": None,
             "error": str(e)
         }
 

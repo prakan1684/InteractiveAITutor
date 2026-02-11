@@ -1,19 +1,13 @@
 import React, { useState } from 'react';
 import './App.css';
 import ChatInterface from './components/ChatInterface';
-import ModeSelector from './components/ModeSelector';
 import FileUpload from './components/FileUpload';
 import ConversationSidebar from './components/ConversationSidebar';
 import CanvasGallery from './components/CanvasGallery';
 
 function App() {
-  const [speedMode, setSpeedMode] = useState('fast');
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [conversationKey, setConversationKey] = useState(0);
-
-  const handleModeChange = (mode) => {
-    setSpeedMode(mode);
-  };
 
   const handleUploadSuccess = (result) => {
     console.log('Upload successful:', result);
@@ -49,10 +43,6 @@ function App() {
         
         <div className="content-area">
           <aside className="settings-sidebar">
-            <ModeSelector 
-              currentMode={speedMode} 
-              onModeChange={handleModeChange} 
-            />
             <FileUpload onUploadSuccess={handleUploadSuccess} />
             <CanvasGallery />
           </aside>
@@ -60,7 +50,6 @@ function App() {
           <main className="chat-container">
             <ChatInterface 
               key={conversationKey}
-              speedMode={speedMode}
               conversationId={currentConversationId}
               onConversationUpdate={handleConversationUpdate}
             />

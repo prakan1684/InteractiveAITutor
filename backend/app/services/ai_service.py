@@ -70,8 +70,7 @@ class AIService:
             if response_format:
                 kwargs["response_format"] = response_format
 
-            logger.info("Using response format: %s", response_format)
-            logger.info(f"LLM call: model={kwargs['model']}, temperature={kwargs['temperature']}")
+            logger.debug(f"LLM call: model={kwargs['model']}, temp={kwargs['temperature']}")
 
             response = await self.client.chat.completions.create(**kwargs)
             result = CompletionResponse(
@@ -80,12 +79,39 @@ class AIService:
                 tokens_used=response.usage.total_tokens,
                 finish_reason=response.choices[0].finish_reason
             )
-            #log tokens and finish reason
-            logger.info(f"Tokens used: {result.tokens_used}, finish reason: {result.finish_reason}")
+            logger.debug(f"LLM response: {result.tokens_used} tokens, {result.finish_reason}")
             return result
         except Exception as e:
             logger.error(f"Error in complete: {e}")
             raise
+    async def complete_stream(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ):
+        """Streaming completion — yields content chunks as they arrive."""
+        try:
+            model_to_use = model or self.model or "gpt-4o-mini"
+            kwargs = {
+                "model": model_to_use,
+                "messages": messages,
+                "temperature": temperature if temperature is not None else (self.temperature if self.temperature is not None else 0.7),
+                "stream": True,
+            }
+            if max_tokens or self.max_tokens:
+                kwargs["max_tokens"] = max_tokens or self.max_tokens
+
+            logger.debug(f"LLM stream: model={kwargs['model']}, temp={kwargs['temperature']}")
+            stream = await self.client.chat.completions.create(**kwargs)
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            logger.error(f"Error in complete_stream: {e}")
+            raise
+
     async def chat(
         self,
         user_message: str,

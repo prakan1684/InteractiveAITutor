@@ -13,6 +13,7 @@ Entry point for the FastAPI application.
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from app.services.ai_service import chat_with_ai
 import uuid
@@ -50,10 +51,15 @@ app = FastAPI(
 
 #app.include_router(canvas.router)
 app.include_router(upload.router)
-#app.include_router(chat.router)
+app.include_router(chat.router)
 app.include_router(get_documents.router)
 #app.include_router(regions.router)
 app.include_router(steps.router)
+
+# Serve canvas images as static files
+canvas_dir = Path("canvas_uploads")
+canvas_dir.mkdir(exist_ok=True)
+app.mount("/canvas_uploads", StaticFiles(directory="canvas_uploads"), name="canvas_uploads")
 
 
 @app.middleware("http")
@@ -94,6 +100,8 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "Interactive AI Tutor", "version": "0.0.1"}
+
+
 
 
 

@@ -1,33 +1,30 @@
-# Elara
+# Interactive AI Tutor
 
-AI-powered tutoring platform with intelligent RAG, canvas analysis, and multi-mode chat system.
+AI-powered tutoring platform with streaming chat, on-demand canvas analysis, and smart conversation context.
 
-## 🎯 Overview
+## Overview
 
-Elara is an interactive AI tutor that combines:
-- **Three-mode chat system** (Simple, Fast RAG, Full Analysis)
-- **Azure Cognitive Search** for scalable RAG
-- **LangGraph agent** for intelligent reasoning
-- **Canvas analysis** for handwritten math work
-- **React frontend** with modern UI
+An interactive AI tutor where students work on problems on an iPad canvas and get real-time feedback through a web chat interface. The system uses vision analysis to read handwritten work and provides guided tutoring responses.
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-React Frontend (localhost:3000)
-        ↓
-   FastAPI Backend (localhost:8000)
-        ↓
-   ┌────────────────────────────┐
-   │  Azure Cognitive Search    │
-   │  - course-materials index  │
-   │  - canvas-sessions index   │
-   └────────────────────────────┘
-        ↓
-   OpenAI APIs (GPT-4o, Embeddings)
+iPad App (PocketProfessor)          React Frontend (localhost:3000)
+   │  canvas strokes/images              │  streaming chat
+   └──────────┐                          │
+              ↓                          ↓
+         FastAPI Backend (localhost:8000)
+              │
+    ┌─────────┴─────────┐
+    │   Chat Agents      │   Canvas Storage
+    │  Intent → Vision   │   (in-memory)
+    │  → Response        │
+    └─────────┬─────────┘
+              ↓
+       OpenAI APIs (GPT-4o)
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Backend
 ```bash
@@ -36,11 +33,7 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure .env with:
-# - OPENAI_API_KEY
-# - AZURE_SEARCH_ENDPOINT
-# - AZURE_SEARCH_KEY
-
+# Configure .env with OPENAI_API_KEY
 uvicorn app.main:app --reload
 ```
 
@@ -51,34 +44,22 @@ npm install
 npm start
 ```
 
-## 📚 Components
+## Key Features
 
-- **[Backend Documentation](./backend/README.md)** - FastAPI + Azure Search + LangGraph
-- **[Frontend Documentation](./frontend/README.md)** - React + Three-mode chat UI
+- **Streaming Chat** — AI responses stream word-by-word via SSE
+- **Canvas Analysis** — On-demand vision analysis of student handwriting
+- **Inline Canvas Display** — Canvas images shown in chat when AI reviews work
+- **Smart Context** — AI tracks conversation flow, understands retries and corrections
+- **Conversation Management** — Persistent conversations with sidebar navigation
+- **Intent Classification** — Automatic detection of what the student needs
 
-## ✨ Key Features
+## Tech Stack
 
-- 🧠 **Intelligent Chat Modes**: Simple (2-3s), Fast RAG (3-5s), Full Analysis (10-15s)
-- 📚 **PDF Upload**: Automatic chunking, embedding, and indexing to Azure Search
-- 🖼️ **Canvas Analysis**: Handwritten math work recognition and feedback
-- 🔍 **Hybrid Search**: Vector + keyword search for optimal retrieval
-- 💾 **Session Management**: Canvas sessions stored in Azure Search
-- ⚡ **Async Architecture**: Non-blocking I/O for concurrent requests
+**Backend:** FastAPI, OpenAI GPT-4o, Python 3.11+
+**Frontend:** React 18, Lucide icons, KaTeX for math rendering
+**iOS App:** Swift (PocketProfessor)
 
-## 🛠️ Tech Stack
+## Documentation
 
-**Backend:**
-- FastAPI, Python 3.11+
-- Azure Cognitive Search
-- LangGraph for agent workflows
-- OpenAI GPT-4o & text-embedding-3-small
-
-**Frontend:**
-- React 18
-- Axios for API calls
-- Lucide React icons
-- Modern CSS with gradients
-
-## 📝 License
-
-Proprietary - All rights reserved
+- **[Backend](./backend/README.md)**
+- **[Frontend](./frontend/README.md)**

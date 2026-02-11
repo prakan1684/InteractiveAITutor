@@ -3,7 +3,7 @@ import { Send, Trash2 } from 'lucide-react';
 import { chatAPI } from '../services/api';
 import MessageList from './MessageList';
 
-const ChatInterface = ({ speedMode, conversationId: propConversationId, onConversationUpdate }) => {
+const ChatInterface = ({ conversationId: propConversationId, onConversationUpdate }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -75,6 +75,8 @@ const ChatInterface = ({ speedMode, conversationId: propConversationId, onConver
     }
   };
 
+  const aiMessageIndexRef = useRef(null);
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
@@ -84,38 +86,92 @@ const ChatInterface = ({ speedMode, conversationId: propConversationId, onConver
     // Set flag to prevent conversation reload during send
     isSendingMessageRef.current = true;
     
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
     setLoading(true);
 
+    // Add user message + placeholder AI message in one update to get correct index
+    setMessages(prev => {
+      const withUser = [...prev, { type: 'user', content: userMessage }];
+      aiMessageIndexRef.current = withUser.length; // index of the placeholder we're about to add
+      return [...withUser, { type: 'ai', content: '', streaming: true }];
+    });
+
     try {
-      const result = await chatAPI.sendMessage(userMessage, speedMode, conversationId);
+      const { read } = chatAPI.sendMessageStream(userMessage, conversationId);
       
-      // Update conversation ID from response
-      if (result.conversation_id) {
-        setConversationId(result.conversation_id);
-        if (onConversationUpdate) {
-          onConversationUpdate(result.conversation_id);
+      for await (const event of read()) {
+        if (event.type === 'meta') {
+          // Got conversation ID
+          if (event.conversation_id) {
+            setConversationId(event.conversation_id);
+            if (onConversationUpdate) {
+              onConversationUpdate(event.conversation_id);
+            }
+          }
+        } else if (event.type === 'canvas_image') {
+          // Insert canvas image message before the AI response placeholder
+          setMessages(prev => {
+            const updated = [...prev];
+            // Insert canvas image at the current AI placeholder position
+            updated.splice(aiMessageIndexRef.current, 0, {
+              type: 'canvas_image',
+              imageUrl: `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${event.image_url}`,
+            });
+            // Shift the AI message index since we inserted before it
+            aiMessageIndexRef.current += 1;
+            return updated;
+          });
+        } else if (event.type === 'status') {
+          // Show status text (e.g. "Thinking...", "Looking at your canvas...")
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[aiMessageIndexRef.current] = {
+              ...updated[aiMessageIndexRef.current],
+              content: event.content,
+              status: event.content, // store status separately
+            };
+            return updated;
+          });
+        } else if (event.type === 'chunk') {
+          // Append content chunk
+          setMessages(prev => {
+            const updated = [...prev];
+            const current = updated[aiMessageIndexRef.current];
+            // If we were showing a status, clear it and start fresh content
+            const existingContent = current.status ? '' : (current.content || '');
+            updated[aiMessageIndexRef.current] = {
+              ...current,
+              content: existingContent + event.content,
+              status: null,
+            };
+            return updated;
+          });
+        } else if (event.type === 'done') {
+          // Finalize the message
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[aiMessageIndexRef.current] = {
+              type: 'ai',
+              content: event.response,
+              streaming: false,
+              metadata: { intent: event.intent },
+            };
+            return updated;
+          });
         }
       }
-      
-      setMessages(prev => [...prev, {
-        type: 'ai',
-        content: result.response,
-        metadata: speedMode === 'full' ? {
-          intent: result.intent,
-          confidence: result.confidence,
-          course_context_count: result.course_context_count,
-          canvas_context_count: result.canvas_context_count
-        } : null
-      }]);
     } catch (error) {
-      setMessages(prev => [...prev, {
-        type: 'system',
-        content: `Error: ${error.message}`
-      }]);
+      // If streaming failed, update the placeholder with error
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[aiMessageIndexRef.current] = {
+          type: 'system',
+          content: `Error: ${error.message}`,
+          streaming: false,
+        };
+        return updated;
+      });
     } finally {
       setLoading(false);
-      // Clear flag after a short delay to ensure state updates complete
       setTimeout(() => {
         isSendingMessageRef.current = false;
       }, 100);

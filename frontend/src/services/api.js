@@ -6,19 +6,59 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const STUDENT_ID = 'student_123';
 
 export const chatAPI = {
-  sendMessage: async (message, speedMode, conversationId = null) => {
-    const use_rag = speedMode !== 'simple';
-    const fast_mode = speedMode === 'fast';
-    
+  sendMessage: async (message, conversationId = null) => {
     const response = await axios.post(`${API_BASE}/chat`, {
       student_id: STUDENT_ID,
       message,
-      use_rag,
-      fast_mode,
       conversation_id: conversationId
     });
     
     return response.data;
+  },
+
+  sendMessageStream: (message, conversationId = null) => {
+    const controller = new AbortController();
+    
+    const stream = fetch(`${API_BASE}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        student_id: STUDENT_ID,
+        message,
+        conversation_id: conversationId
+      }),
+      signal: controller.signal
+    });
+
+    return {
+      abort: () => controller.abort(),
+      read: async function* () {
+        const response = await stream;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const payload = JSON.parse(line.slice(6));
+                yield payload;
+              } catch (e) {
+                // skip malformed events
+              }
+            }
+          }
+        }
+      }
+    };
   },
   
   getConversations: async () => {
