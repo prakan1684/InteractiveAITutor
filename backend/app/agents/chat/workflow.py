@@ -8,6 +8,7 @@ from .response_agent import ResponseAgent
 from app.services.canvas_storage import canvas_storage
 from app.agents.canvas.vision_agent import VisionAgent
 from app.agents.canvas.schema import CanvasState
+from .action_classifier import classify_response_actions
  
 logger = get_logger(__name__)
  
@@ -209,5 +210,10 @@ async def run_chat_workflow_stream(
         full_response += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
     
+    # Phase 4: classify if we should show action buttons
+    actions = await classify_response_actions(full_response, state.intent)
+    if actions:
+        yield f"data: {json.dumps({'type': 'actions', 'actions': actions})}\n\n"
+    
     logger.info(f"Chat workflow (stream) done - intent={state.intent}")
-    yield f"data: {json.dumps({'type': 'done', 'intent': state.intent, 'response': full_response})}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'intent': state.intent, 'response': full_response, 'actions': actions})}\n\n"

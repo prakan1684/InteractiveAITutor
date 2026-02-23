@@ -77,66 +77,48 @@ const ChatInterface = ({ conversationId: propConversationId, onConversationUpdat
 
   const aiMessageIndexRef = useRef(null);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-
-    const userMessage = input.trim();
-    setInput('');
-    
-    // Set flag to prevent conversation reload during send
+  const _sendAndStream = async (messageText) => {
     isSendingMessageRef.current = true;
-    
     setLoading(true);
 
-    // Add user message + placeholder AI message in one update to get correct index
     setMessages(prev => {
-      const withUser = [...prev, { type: 'user', content: userMessage }];
-      aiMessageIndexRef.current = withUser.length; // index of the placeholder we're about to add
+      const withUser = [...prev, { type: 'user', content: messageText }];
+      aiMessageIndexRef.current = withUser.length;
       return [...withUser, { type: 'ai', content: '', streaming: true }];
     });
 
     try {
-      const { read } = chatAPI.sendMessageStream(userMessage, conversationId);
-      
+      const { read } = chatAPI.sendMessageStream(messageText, conversationId);
+
       for await (const event of read()) {
         if (event.type === 'meta') {
-          // Got conversation ID
           if (event.conversation_id) {
             setConversationId(event.conversation_id);
-            if (onConversationUpdate) {
-              onConversationUpdate(event.conversation_id);
-            }
+            if (onConversationUpdate) onConversationUpdate(event.conversation_id);
           }
         } else if (event.type === 'canvas_image') {
-          // Insert canvas image message before the AI response placeholder
           setMessages(prev => {
             const updated = [...prev];
-            // Insert canvas image at the current AI placeholder position
             updated.splice(aiMessageIndexRef.current, 0, {
               type: 'canvas_image',
               imageUrl: `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${event.image_url}`,
             });
-            // Shift the AI message index since we inserted before it
             aiMessageIndexRef.current += 1;
             return updated;
           });
         } else if (event.type === 'status') {
-          // Show status text (e.g. "Thinking...", "Looking at your canvas...")
           setMessages(prev => {
             const updated = [...prev];
             updated[aiMessageIndexRef.current] = {
               ...updated[aiMessageIndexRef.current],
-              content: event.content,
-              status: event.content, // store status separately
+              status: event.content || null,
             };
             return updated;
           });
         } else if (event.type === 'chunk') {
-          // Append content chunk
           setMessages(prev => {
             const updated = [...prev];
             const current = updated[aiMessageIndexRef.current];
-            // If we were showing a status, clear it and start fresh content
             const existingContent = current.status ? '' : (current.content || '');
             updated[aiMessageIndexRef.current] = {
               ...current,
@@ -145,22 +127,31 @@ const ChatInterface = ({ conversationId: propConversationId, onConversationUpdat
             };
             return updated;
           });
-        } else if (event.type === 'done') {
-          // Finalize the message
+        } else if (event.type === 'actions') {
           setMessages(prev => {
             const updated = [...prev];
+            updated[aiMessageIndexRef.current] = {
+              ...updated[aiMessageIndexRef.current],
+              actions: event.actions,
+            };
+            return updated;
+          });
+        } else if (event.type === 'done') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const current = updated[aiMessageIndexRef.current];
             updated[aiMessageIndexRef.current] = {
               type: 'ai',
               content: event.response,
               streaming: false,
               metadata: { intent: event.intent },
+              actions: current.actions || null,
             };
             return updated;
           });
         }
       }
     } catch (error) {
-      // If streaming failed, update the placeholder with error
       setMessages(prev => {
         const updated = [...prev];
         updated[aiMessageIndexRef.current] = {
@@ -172,10 +163,20 @@ const ChatInterface = ({ conversationId: propConversationId, onConversationUpdat
       });
     } finally {
       setLoading(false);
-      setTimeout(() => {
-        isSendingMessageRef.current = false;
-      }, 100);
+      setTimeout(() => { isSendingMessageRef.current = false; }, 100);
     }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMessage = input.trim();
+    setInput('');
+    await _sendAndStream(userMessage);
+  };
+
+  const handleActionClick = (actionLabel) => {
+    if (loading) return;
+    _sendAndStream(actionLabel);
   };
 
   const handleKeyPress = (e) => {
@@ -197,7 +198,7 @@ const ChatInterface = ({ conversationId: propConversationId, onConversationUpdat
         )}
       </div>
       
-      <MessageList messages={messages} />
+      <MessageList messages={messages} onActionClick={handleActionClick} />
       <div ref={messagesEndRef} />
       
       <div className="chat-input-container">

@@ -47,6 +47,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Planning Docs
+
+- Architecture decision record: `docs/ADR-001-Agentic-Architecture.md`
+- Milestone execution board: `docs/MILESTONE_BOARD.md`
+- Hands-on build journey guide: `docs/BUILD_PLAYBOOK.md`
+- State contract: `docs/contracts/STATE_CONTRACT.md`
+- Tool contracts: `docs/contracts/TOOL_CONTRACTS.md`
+
 ### Environment Variables
 
 ```bash

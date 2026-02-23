@@ -14,3 +14,4 @@ class ChatState:
 
     response: Optional[str] = None
     action: Optional[str] = None
+    suggested_actions: List[Dict] = field(default_factory=list)
