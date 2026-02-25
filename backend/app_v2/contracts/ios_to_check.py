@@ -105,7 +105,6 @@ def _map_client_meta(payload: IOSAnalyzePayload) -> ClientMeta:
 def ios_payload_to_check_request(
     payload: IOSAnalyzePayload,
     *,
-    last_snapshot_id: Optional[str] = None,
     include_correction: bool = False,
     include_debug_trace: bool = False,
 ) -> CheckRequest:
@@ -128,6 +127,7 @@ def ios_payload_to_check_request(
 
     snapshot = Snapshot(
         # snapshot_id is assigned by backend store later
+        snapshot_id=payload.snapshotId,
         session_id=payload.sessionId,
         user_id=None,
         steps=mapped_steps,
@@ -138,7 +138,7 @@ def ios_payload_to_check_request(
     return CheckRequest(
         session_id=payload.sessionId,
         snapshot=snapshot,
-        last_snapshot_id=last_snapshot_id,
+        last_snapshot_id=payload.lastSnapshotId,
         client_meta=_map_client_meta(payload),
         include_correction=include_correction,
         include_debug_trace=include_debug_trace,

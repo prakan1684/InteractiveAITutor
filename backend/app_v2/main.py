@@ -3,7 +3,7 @@ from app.core.logger import get_logger
 from app.core.logging_config import setup_logging
 from app_v2.routers.check import router as check_router
 
-setup_logging(level="INFO")
+setup_logging(level="INFO", include_time=False, leading_newline=True)
 logger = get_logger(__name__)
 
 app = FastAPI(

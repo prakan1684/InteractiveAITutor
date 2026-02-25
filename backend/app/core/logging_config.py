@@ -1,17 +1,24 @@
 import logging
 import sys
 
-
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+LOG_FORMAT_NO_TIME = "%(levelname)s [%(name)s] %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-def setup_logging(level: str="INFO"):
+def setup_logging(
+    level: str = "INFO",
+    include_time: bool = True,
+    leading_newline: bool = False,
+):
     #prevening duplicate handlers if called multiple time
     root= logging.getLogger()
     if root.handlers:
         return
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
+    fmt = LOG_FORMAT if include_time else LOG_FORMAT_NO_TIME
+    if leading_newline:
+        fmt = "\n" + fmt
+    handler.setFormatter(logging.Formatter(fmt, DATE_FORMAT))
     root.setLevel(level)
     root.addHandler(handler)
     

@@ -76,3 +76,8 @@ class IOSAnalyzePayload(BaseModel):
 
 
     exportedDataBase64: Optional[str] = None
+
+    #snapshots
+    snapshotId: str = Field(..., min_length=1)
+    lastSnapshotId: Optional[str] = None
+

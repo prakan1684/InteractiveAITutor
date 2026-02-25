@@ -5,6 +5,7 @@ import re
 from typing import Optional
 
 
+from app_v2.orchestrator.check_orchestrator import CheckOrchestrator
 from fastapi import APIRouter, HTTPException
 
 from app.core.logger import get_logger
@@ -16,22 +17,28 @@ from app_v2.contracts.check_api import CheckRequest, CheckResponse
 from app_v2.contracts.ios_payload import IOSAnalyzePayload
 from app_v2.contracts.ios_to_check import ios_payload_to_check_request
 from app_v2.domain.enums import CheckStatus
+from app_v2.stores.snapshot_store import SnapshotStore
+from app_v2.stores.trace_store import TraceStore
+
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["check"])
 MAX_CANVAS_IMAGE_BASE64_CHARS = 8_000_000
 MAX_CANVAS_IMAGE_BYTES = 6_000_000
+snapshot_store = SnapshotStore()
+trace_store = TraceStore()
+orchestrator = CheckOrchestrator(snapshot_store, trace_store)
 
 
-def _stub_check_response() -> CheckResponse:
+def _stub_check_response(new_snapshot_id: Optional[str] = None) -> CheckResponse:
     return CheckResponse(
         status=CheckStatus.NEED_MORE_CONTEXT,
         confidence=1.0,
         highlights=[],
         hint="Baseline saved. Add one more step, then press Check again.",
         correction=None,
-        new_snapshot_id=f"snap_{uuid4().hex}",
+        new_snapshot_id=new_snapshot_id or f"snap_{uuid4().hex}",
         trace_id=f"trace_{uuid4().hex}",
         debug_trace_summary=None,
     )
@@ -121,7 +128,7 @@ def _dump_canvas_image(payload: IOSAnalyzePayload) -> Optional[Path]:
 
 @router.post("/check", response_model=CheckResponse)
 async def check_work(request: CheckRequest) -> CheckResponse:
-    return _stub_check_response()
+    return await orchestrator.run_check(request)
 
 
 @router.post("/check/ios", response_model=CheckResponse)
@@ -144,7 +151,6 @@ async def check_work_ios(payload: IOSAnalyzePayload) -> CheckResponse:
     try:
         canonical_request = ios_payload_to_check_request(
             payload,
-            last_snapshot_id=None,
             include_correction=False,
             include_debug_trace=True,
         )
@@ -157,4 +163,5 @@ async def check_work_ios(payload: IOSAnalyzePayload) -> CheckResponse:
         canonical_request.session_id,
         len(canonical_request.snapshot.steps),
     )
-    return _stub_check_response()
+    return await orchestrator.run_check(canonical_request)
+
