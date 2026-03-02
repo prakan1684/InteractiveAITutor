@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app_v2.domain.enums import ChangeType, CheckStatus
+from app_v2.domain.enums import ChangeType, CheckStatus, EvaluationVerdict
 
 class ChangedStepRef(BaseModel):
     # Keep this simple and flexible for V1
@@ -42,3 +42,15 @@ class FeedbackResult(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     hint: str = Field(..., min_length=1)
     summary: Optional[str] = None
+
+
+class EvaluationResult(BaseModel):
+    verdict: EvaluationVerdict
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    reason_code: str = Field(..., min_length=1)
+    summary: str = Field(..., min_length=1)
+
+    target_step: Optional[ChangedStepRef] = None
+
+    math_engine_used: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)

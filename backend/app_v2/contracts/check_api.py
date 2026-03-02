@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app_v2.contracts.snapshot import BBox, ClientMeta, Snapshot
 from app_v2.domain.enums import CheckStatus, HighlightType
+from app_v2.contracts.agent_goal import AgentGoal
 
 
 
@@ -46,6 +47,9 @@ class CheckResponse(BaseModel):
 
     highlights: List[Highlight] = Field(default_factory=list)
     hint: Optional[str] = None
+
+    # Agent goal for UI guidance
+    agent_goal: Optional[AgentGoal] = None
 
     # Null unless requested / available
     correction: Optional[CorrectionPayload] = None

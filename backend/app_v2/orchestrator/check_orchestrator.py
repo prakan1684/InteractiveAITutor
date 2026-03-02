@@ -1,15 +1,30 @@
-
-
-from app_v2.stores.snapshot_store import SnapshotStore
-from app_v2.stores.trace_store import TraceStore
-from app_v2.contracts.trace import CheckTrace, TraceEvent
-from app_v2.contracts.check_api import CheckRequest, CheckResponse
-from app_v2.domain.enums import TraceEventType, CheckStatus, ChangeType
-from app.core.logger import get_logger
-from app_v2.tools.workdiff import WorkDiffTool
-
 from datetime import datetime
 from uuid import uuid4
+from typing import List
+
+from app.core.logger import get_logger
+from app_v2.contracts.agent_goal import AgentGoal
+from app_v2.contracts.snapshot import Snapshot
+from app_v2.contracts.check_api import CheckRequest, CheckResponse, Highlight
+from app_v2.contracts.diff_feedback import DiffResult, EvaluationResult
+from app_v2.contracts.session_state import SessionMode
+from app_v2.contracts.trace import CheckTrace, TraceEvent
+from app_v2.domain.enums import (
+    ChangeType,
+    CheckStatus,
+    EvaluationVerdict,
+    TraceEventType,
+    TutorIntent,
+    HighlightType,
+)
+from app_v2.stores.session_state_store import SessionStateStore
+from app_v2.stores.snapshot_store import SnapshotStore
+from app_v2.stores.trace_store import TraceStore
+from app_v2.tools.solution_evaluator import SolutionEvaluatorTool
+from app_v2.tools.workdiff import WorkDiffTool
+from app_v2.tools.feedback_generator import FeedbackGeneratorTool
+
+
 
 logger = get_logger(__name__)
 
@@ -22,14 +37,25 @@ class CheckOrchestrator:
     2. early agentic branching decisions
     3. persist traces
     """
-    def __init__(self, snapshot_store: SnapshotStore, trace_store: TraceStore):
+    def __init__(self,
+     snapshot_store: SnapshotStore, 
+     trace_store: TraceStore,
+     session_state_store: SessionStateStore
+     ):
         self.snapshot_store = snapshot_store
         self.trace_store = trace_store
+        self.session_state_store = session_state_store
         self.workdiff_tool = WorkDiffTool()
+        self.evaluator_tool = SolutionEvaluatorTool()
+        self.feedback_tool = FeedbackGeneratorTool()
+        
+
 
     
     async def run_check(self, request: CheckRequest) -> CheckResponse:
         started_at = datetime.utcnow()
+
+        #create the trace
         trace = CheckTrace(
             trace_id = f"trace_{uuid4().hex}",
             session_id = request.session_id,
@@ -37,151 +63,329 @@ class CheckOrchestrator:
             tool_calls = [],
             events = []
         )
-        logger.info(
-            "orchestrator_start trace_id=%s session_id=%s has_last_snapshot_id=%s step_count=%d",
-            trace.trace_id,
-            request.session_id,
-            request.last_snapshot_id is not None,
-            len(request.snapshot.steps),
+        
+        # persist current snapshot to the snapshot store
+        saved_snapshot = self.snapshot_store.save(request.snapshot)
+        trace.snapshot_id_after = saved_snapshot.snapshot_id
+
+        #load session state and previous snapshot if it exists
+        session_state = self.session_state_store.get_or_default(request.session_id)
+        previous_snapshot = None
+        if request.last_snapshot_id:
+            previous_snapshot = self.snapshot_store.get(request.last_snapshot_id)
+            if previous_snapshot:
+                trace.snapshot_id_before = previous_snapshot.snapshot_id
+
+        
+        #evaluate current work (no previous snapshot needed)
+        evaluation_result = await self.evaluator_tool.evaluate(
+            snapshot=saved_snapshot,
+            workdiff_result=None
         )
+
+        self._trace_evaluator(trace, evaluation_result)
+
+        #we will only check workdiff if previous snap exists and we are in "correction" mode
+        workdiff_result = None
+        should_run_diff= (
+            session_state.mode == SessionMode.CORRECTION_ACTIVE
+            and previous_snapshot is not None
+        )
+
+        if should_run_diff:
+            workdiff_result = await self.workdiff_tool.compute_diff(
+                before=previous_snapshot,
+                after=saved_snapshot
+            )
+            self._trace_workdiff(trace, workdiff_result)
+        
+
+        #now we route to response + next mode + goal
+        status, confidence, hint, agent_goal, next_mode = self._route_decision(
+            evaluation_result=evaluation_result,
+            workdiff_result=workdiff_result,
+            previous_snapshot_exists=previous_snapshot is not None,
+            current_mode=session_state.mode,
+        )
+
+
+        #generate feedback 
+
+        feedback_output = await self.feedback_tool.generate(
+            snapshot=saved_snapshot,
+            evaluation_result=evaluation_result,
+            agent_goal=agent_goal,
+            workdiff_result=workdiff_result,
+            session_state=session_state,
+            
+        )
+
+
+        hint = feedback_output.hint
+        agent_goal.title = feedback_output.title
+        agent_goal.message = feedback_output.message
+        agent_goal.next_action = feedback_output.next_action
+        agent_goal.focus_step_id = feedback_output.focus_step_id
+        agent_goal.focus_line_index = feedback_output.focus_line_index
+
 
         trace.events.append(
             TraceEvent(
                 event_type=TraceEventType.DECISION,
-                message="Received Check Request",
+                message="Agent goal selected",
                 details={
-                    "has_last_snapshot_id": request.last_snapshot_id is not None,
-                    "step_count": len(request.snapshot.steps)
-                },
-
-            )
-        )
-
-        saved_snapshot = self.snapshot_store.save(request.snapshot)
-        trace.snapshot_id_after = saved_snapshot.snapshot_id
-        logger.info(
-            "snapshot_saved trace_id=%s snapshot_id_after=%s session_id=%s",
-            trace.trace_id,
-            saved_snapshot.snapshot_id,
-            saved_snapshot.session_id,
-        )
-
-        if not request.last_snapshot_id: 
-            logger.info("orchestrator_branch trace_id=%s branch=baseline_no_previous", trace.trace_id)
-            trace.events.append(
-                TraceEvent(
-                    event_type=TraceEventType.DECISION,
-                    message="No previous snapshot found, starting new session"
-                )
-            )
-
-            return self._finalize_and_build_response(
-                trace=trace,
-                status=CheckStatus.NEED_MORE_CONTEXT,
-                confidence=1.0,
-                hint="Baseline saved. Add one more step, then press check again",
-                new_snapshot_id=saved_snapshot.snapshot_id,
-                started_at=started_at
-            )
-        
-        previous_snapshot = self.snapshot_store.get(request.last_snapshot_id)
-        if previous_snapshot is None:
-            logger.info(
-                "orchestrator_branch trace_id=%s branch=previous_missing requested_last_snapshot_id=%s",
-                trace.trace_id,
-                request.last_snapshot_id,
-            )
-            trace.events.append(
-                TraceEvent(
-                    event_type=TraceEventType.STORE_READ,
-                    message="Previous snapshot id not found",
-                    details={"last_snapshot_id": request.last_snapshot_id},
-                )
-            )
-            return self._finalize_and_build_response(
-                trace=trace,
-                status=CheckStatus.NEED_MORE_CONTEXT,
-                confidence=0.9,
-                hint="I couldn't find the previous snapshot. Baseline saved; add one more step and press Check again.",
-                new_snapshot_id=saved_snapshot.snapshot_id,
-                started_at=started_at,
-            )
-
-
-
-        trace.snapshot_id_before = previous_snapshot.snapshot_id
-        logger.info(
-            "previous_snapshot_loaded trace_id=%s snapshot_id_before=%s",
-            trace.trace_id,
-            previous_snapshot.snapshot_id,
-        )
-        trace.events.append(
-            TraceEvent(
-                event_type=TraceEventType.STORE_READ,
-                message="Loaded previous snapshot successfully",
-                details={
-                    "previous_snapshot_id": previous_snapshot.snapshot_id,
-                    "previous_step_count": len(previous_snapshot.steps),
-                    "current_step_count": len(saved_snapshot.steps),
+                    "intent": agent_goal.intent.value,
+                    "title": agent_goal.title,
+                    "next_action": agent_goal.next_action,
+                    "focus_step_id": agent_goal.focus_step_id,
+                    "focus_line_index": agent_goal.focus_line_index,
+                    "current_mode": session_state.mode.value,
+                    "next_mode": next_mode.value,
                 },
             )
-        )
-
-        
-
-        #implement workdiff tool to analyze snapshot and previous snapshot
-        logger.info(
-            "workdiff_start trace_id=%s snapshot_before=%s snapshot_after=%s",
-            trace.trace_id,
-            previous_snapshot.snapshot_id,
-            saved_snapshot.snapshot_id,
-        )
-        workdiff_result = await self.workdiff_tool.compute_diff(previous_snapshot, saved_snapshot)
-        logger.info(
-            "workdiff_result trace_id=%s change_type=%s confidence=%.2f matched_steps=%d step_delta=%d changed_steps=%d summary=%s",
-            trace.trace_id,
-            workdiff_result.change_type.value,
-            workdiff_result.confidence,
-            workdiff_result.matched_steps,
-            workdiff_result.step_count_delta,
-            len(workdiff_result.changed_steps),
-            workdiff_result.summary,
         )
 
 
         trace.events.append(
             TraceEvent(
                 event_type=TraceEventType.TOOL_CALL,
+                message="Feedback generated",
+                details={
+                    "tool": "feedback_generator",
+                    "title": feedback_output.title,
+                    "next_action": feedback_output.next_action,
+                    "focus_step_id": feedback_output.focus_step_id,
+                    "focus_line_index": feedback_output.focus_line_index,
+                    "tone": feedback_output.tone,
+                },
+            )
+        )
+
+        highlights = self._build_highlights(
+            snapshot=saved_snapshot,
+            focus_step_id=feedback_output.focus_step_id,
+            focus_line_index=feedback_output.focus_line_index,
+            status=status,
+        )
+
+        session_state.mode = next_mode
+        session_state.updated_at = datetime.utcnow()
+
+        if evaluation_result.verdict == EvaluationVerdict.NEEDS_REVISION:
+            session_state.active_reason_code = evaluation_result.reason_code
+            session_state.active_step_id = evaluation_result.target_step.step_id if evaluation_result.target_step else None
+            session_state.active_line_index = evaluation_result.target_step.line_index if evaluation_result.target_step else None
+        elif evaluation_result.verdict == EvaluationVerdict.CORRECT:
+            session_state.active_reason_code = None
+            session_state.active_step_id = None
+            session_state.active_line_index = None
+
+        
+        self.session_state_store.save(session_state)
+
+        return self._finalize_and_build_response(
+            trace=trace,
+            status=status,
+            confidence=confidence,
+            hint=hint,
+            highlights=highlights,
+            agent_goal=agent_goal,
+            new_snapshot_id=saved_snapshot.snapshot_id,
+            started_at=started_at,
+        )
+
+
+    def _route_decision(
+        self,
+        *,
+        evaluation_result: EvaluationResult,
+        workdiff_result: DiffResult | None,
+        previous_snapshot_exists: bool,
+        current_mode: SessionMode,
+    ) -> tuple[CheckStatus, float, str, AgentGoal, SessionMode]:
+        verdict = evaluation_result.verdict
+        conf = evaluation_result.confidence
+        summary = evaluation_result.summary
+        
+
+        # Optional override if correction attempt became a rewrite
+        if workdiff_result and workdiff_result.change_type == ChangeType.REWRITE:
+            goal = self._goal(
+                intent=TutorIntent.RESET_BASELINE,
+                title="Reset Baseline",
+                message="You rewrote the work significantly, so I’ll treat this as a fresh attempt.",
+                next_action="CONTINUE_SOLVING",
+                tools_planned=["solution_evaluator"],
+                tools_used=["solution_evaluator", "workdiff"],
+            )
+            hint = self._resolve_hint(
+                summary=workdiff_result.summary or summary,
+                fallback="You rewrote much of the work, so I reset baseline for the next check.",
+            )
+            return CheckStatus.BASELINE_RESET, conf, hint, goal, SessionMode.NORMAL
+
+
+
+        if verdict == EvaluationVerdict.CORRECT:
+            goal = self._goal(
+                intent=TutorIntent.CELEBRATE_AND_ADVANCE,
+                title="Advance",
+                message="Your work looks correct. Next step is to move to a new practice problem.",
+                next_action="NEW_PRACTICE",
+                tools_planned=[],
+                tools_used=["solution_evaluator"] + (["workdiff"] if workdiff_result else []),
+            )
+            hint = self._resolve_hint(
+                summary=summary,
+                fallback="Nice work. Your current solution looks correct.",
+            )
+            return CheckStatus.VALID, conf, hint, goal, SessionMode.NORMAL
+        
+
+
+        if verdict == EvaluationVerdict.NEEDS_REVISION:
+            in_revision_check = workdiff_result is not None
+            goal = self._goal(
+                intent=TutorIntent.VERIFY_REVISION if in_revision_check else TutorIntent.CORRECT_ACTIVE_ERROR,
+                title="Revise This Step",
+                message="There is an issue to fix. I’ll guide one revision at a time and re-check your update.",
+                next_action="REVISE_AND_CHECK",
+                tools_planned=["workdiff", "solution_evaluator"] if not in_revision_check else ["solution_evaluator"],
+                tools_used=["solution_evaluator"] + (["workdiff"] if workdiff_result else []),
+            )
+            hint = self._resolve_hint(
+                summary=summary,
+                fallback="There is an issue in the current work. Revise this step and check again.",
+            )
+            return CheckStatus.INVALID, conf, hint, goal, SessionMode.CORRECTION_ACTIVE
+
+
+        # UNCERTAIN
+        if not previous_snapshot_exists:
+            goal = self._goal(
+                intent=TutorIntent.COLLECT_MORE_CONTEXT,
+                title="Need One More Step",
+                message="I need a bit more work shown before I can evaluate reliably.",
+                next_action="ADD_STEP_AND_CHECK",
+                tools_planned=["solution_evaluator"],
+                tools_used=["solution_evaluator"],
+            )
+            hint = self._resolve_hint(
+                summary=summary,
+                fallback="Add one more clear step, then press Check again.",
+            )
+            return CheckStatus.NEED_MORE_CONTEXT, conf, hint, goal, current_mode
+        
+
+        goal = self._goal(
+            intent=TutorIntent.HANDLE_UNCERTAINTY,
+            title="Uncertain Evaluation",
+            message="I can’t verify confidence in your solution.",
+            next_action="CLARIFY_AND_CHECK",
+            tools_planned=["solution_evaluator"],
+            tools_used=["solution_evaluator"] + (["workdiff"] if workdiff_result else []),
+        )
+
+        hint = self._resolve_hint(
+            summary=summary,
+            fallback="I can’t verify this confidently yet. Clarify the next step and check again.",
+        )
+        return CheckStatus.UNCERTAIN, conf, hint, goal, current_mode
+    
+
+
+    def _trace_evaluator(self, trace: CheckTrace, evaluation_result: EvaluationResult) -> None:
+        trace.events.append(
+            TraceEvent(
+                event_type=TraceEventType.TOOL_CALL,
+                message="Solution evaluator completed",
+                details={
+                    "tool": "solution_evaluator",
+                    "verdict": evaluation_result.verdict.value,
+                    "confidence": evaluation_result.confidence,
+                    "reason_code": evaluation_result.reason_code,
+                    "summary": evaluation_result.summary,
+                    "target_step": (
+                        evaluation_result.target_step.model_dump()
+                        if evaluation_result.target_step
+                        else None
+                    ),
+                },
+            )
+        )
+
+
+    def _trace_workdiff(self, trace: CheckTrace, workdiff_result: DiffResult) -> None:
+        trace.events.append(
+            TraceEvent(
+                event_type=TraceEventType.TOOL_CALL,
                 message="Workdiff computed successfully",
                 details={
+                    "tool": "workdiff",
                     "change_type": workdiff_result.change_type.value,
                     "confidence": workdiff_result.confidence,
                     "step_count_before": workdiff_result.step_count_before,
                     "step_count_after": workdiff_result.step_count_after,
                     "step_count_delta": workdiff_result.step_count_delta,
                     "matched_steps": workdiff_result.matched_steps,
-                    "changed_steps": [step.model_dump() for step in workdiff_result.changed_steps],
+                    "changed_steps": [s.model_dump() for s in workdiff_result.changed_steps],
                     "summary": workdiff_result.summary,
                 },
             )
         )
-        status, hint = self._map_workdiff_to_response(workdiff_result)
-        logger.info(
-            "orchestrator_branch trace_id=%s branch=follow_up_diff_routed change_type=%s routed_status=%s",
-            trace.trace_id,
-            workdiff_result.change_type.value,
-            status.value,
-        )
 
-        return self._finalize_and_build_response(
-            trace=trace,
-            status=status,
-            confidence=workdiff_result.confidence,
-            hint=hint,
-            new_snapshot_id=saved_snapshot.snapshot_id,
-            started_at=started_at,
-        )
 
+
+    #building highlight helper
+    def _build_highlights(
+        self,
+        snapshot: Snapshot,
+        focus_step_id: str | None,
+        focus_line_index: int | None,
+        status: CheckStatus,
+    ) -> List[Highlight]:
+        matched_step = None
+        if focus_step_id:
+            matched_step = next(
+                (step for step in snapshot.steps if step.step_id == focus_step_id),
+                None,
+            )
+
+        if matched_step is None and focus_line_index is not None:
+            matched_step = next(
+                (step for step in snapshot.steps if step.line_index == focus_line_index),
+                None,
+            )
+        
+        if matched_step is None:
+            return []
+        
+        
+        if status == CheckStatus.INVALID:
+            highlight_type = HighlightType.UNDERLINE
+            label = "Revise this step"
+        elif status == CheckStatus.UNCERTAIN:
+            highlight_type = HighlightType.HIGHLIGHT
+            label = "Check again"
+        else:
+            highlight_type = HighlightType.HIGHLIGHT
+            label = "Focus here"
+        
+        return [
+            Highlight(
+                bbox=matched_step.bbox,
+                type=highlight_type,
+                label=label,
+            )
+        ]
+
+
+
+
+
+        
+
+    
 
     def _finalize_and_build_response(
         self,
@@ -192,6 +396,8 @@ class CheckOrchestrator:
         hint: str,
         new_snapshot_id: str,
         started_at: datetime,
+        agent_goal: AgentGoal | None,
+        highlights: List[Highlight],
     ) -> CheckResponse:
 
         completed_at = datetime.utcnow()
@@ -231,44 +437,34 @@ class CheckOrchestrator:
         return CheckResponse(
             status=status,
             confidence=confidence,
-            highlights=[],
+            highlights=highlights,
             hint=hint,
             correction=None,
             new_snapshot_id=new_snapshot_id,
             trace_id=saved_trace.trace_id,
             debug_trace_summary=None,
+            agent_goal=agent_goal,
         )
 
-    def _map_workdiff_to_response(self, workdiff_result) -> tuple[CheckStatus, str]:
-        """
-        Map workdiff change classification into a user-facing check status + hint.
 
-        This is intentionally simple for V1 and can be replaced by a richer
-        feedback generator later.
-        """
-        change_type = workdiff_result.change_type
-        summary = (workdiff_result.summary or "").strip()
-
-        if change_type == ChangeType.EDIT_IN_PLACE:
-            return (
-                CheckStatus.STALE_DUE_TO_EDIT,
-                summary or "You changed an earlier step. Later work may be stale, so re-check from here.",
-            )
-
-        if change_type == ChangeType.REWRITE:
-            return (
-                CheckStatus.BASELINE_RESET,
-                summary or "This looks like a major rewrite. I reset the baseline for the next check.",
-            )
-
-        if change_type == ChangeType.APPEND:
-            return (
-                CheckStatus.UNCERTAIN,
-                summary or "You added a new step. I can compare it next once verifier logic is enabled.",
-            )
-
-        return (
-            CheckStatus.UNCERTAIN,
-            summary or "I couldn't confidently classify the change. Try checking again after one more clear step.",
+    def _goal(
+        self, 
+        intent: TutorIntent, 
+        title: str, 
+        message: str, 
+        next_action: str, 
+        tools_planned: list[str] | None = None, 
+        tools_used: list[str] | None = None
+    ) -> AgentGoal:
+        return AgentGoal(
+            intent=intent,
+            title=title,
+            message=message,
+            next_action=next_action,
+            tools_planned=tools_planned or [],
+            tools_used=tools_used or []
         )
-        
+
+    def _resolve_hint(self, summary: str | None, fallback: str) -> str:
+        normalized = (summary or "").strip()
+        return normalized or fallback
