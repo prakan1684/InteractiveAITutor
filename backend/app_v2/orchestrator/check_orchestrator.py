@@ -23,6 +23,9 @@ from app_v2.stores.trace_store import TraceStore
 from app_v2.tools.solution_evaluator import SolutionEvaluatorTool
 from app_v2.tools.workdiff import WorkDiffTool
 from app_v2.tools.feedback_generator import FeedbackGeneratorTool
+from app_v2.contracts.practice_problem import PracticeProblemResult
+from app_v2.tools.practice_problem_generator import PracticeProblemGeneratorTool
+
 
 
 
@@ -48,7 +51,7 @@ class CheckOrchestrator:
         self.workdiff_tool = WorkDiffTool()
         self.evaluator_tool = SolutionEvaluatorTool()
         self.feedback_tool = FeedbackGeneratorTool()
-        
+        self.practice_problem_generator_tool = PracticeProblemGeneratorTool()
 
 
     
@@ -182,6 +185,10 @@ class CheckOrchestrator:
 
         
         self.session_state_store.save(session_state)
+
+        practice_problem = None
+        if status == CheckStatus.VALID:
+            practice_problem = await self.practice_problem_generator_tool.generate(saved_snapshot)
 
         return self._finalize_and_build_response(
             trace=trace,
@@ -398,6 +405,7 @@ class CheckOrchestrator:
         started_at: datetime,
         agent_goal: AgentGoal | None,
         highlights: List[Highlight],
+        practice_problem: PracticeProblemResult | None,
     ) -> CheckResponse:
 
         completed_at = datetime.utcnow()
@@ -444,6 +452,7 @@ class CheckOrchestrator:
             trace_id=saved_trace.trace_id,
             debug_trace_summary=None,
             agent_goal=agent_goal,
+            practice_problem=practice_problem,
         )
 
 

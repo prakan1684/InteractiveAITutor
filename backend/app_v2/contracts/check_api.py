@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from app_v2.contracts.snapshot import BBox, ClientMeta, Snapshot
 from app_v2.domain.enums import CheckStatus, HighlightType
 from app_v2.contracts.agent_goal import AgentGoal
+from app_v2.contracts.practice_problem import PracticeProblemResult
+
 
 
 
@@ -59,6 +61,8 @@ class CheckResponse(BaseModel):
 
     # Optional dev/debug data
     debug_trace_summary: Optional[DebugTraceSummary] = None
+
+    practice_problem: Optional[PracticeProblemResult] = None
 
 
 
