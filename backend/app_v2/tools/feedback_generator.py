@@ -24,18 +24,21 @@ class FeedbackGeneratorTool:
         agent_goal: AgentGoal,
         workdiff_result: Optional[DiffResult] = None,
         session_state: Optional[SessionAgentState] = None,
+        original_error_snapshot: Optional[Snapshot] = None,
     ) -> FeedbackOutput:
         snapshot_summary = self._snapshot_summary(snapshot)
         evaluation_summary = self._evaluation_summary(evaluation_result)
         workdiff_summary = self._workdiff_summary(workdiff_result)
         session_state_summary = self._session_state_summary(session_state)
         goal_summary = self._goal_summary(agent_goal)
+        original_error_summary = self._snapshot_summary(original_error_snapshot) if original_error_snapshot else None
         prompt = self._build_prompt(
             snapshot_summary=snapshot_summary,
             evaluation_summary=evaluation_summary,
             workdiff_summary=workdiff_summary,
             session_state_summary=session_state_summary,
             goal_summary=goal_summary,
+            original_error_summary=original_error_summary,
         )
 
         try:
@@ -127,6 +130,7 @@ class FeedbackGeneratorTool:
         workdiff_summary: Optional[Dict[str, Any]],
         session_state_summary: Optional[Dict[str, Any]],
         goal_summary: Dict[str, Any],
+        original_error_summary: Optional[Dict[str, Any]],
     ) -> str:
         return f"""
 You are generating short, student-facing tutoring feedback for a math tutor app.
@@ -134,14 +138,28 @@ You are generating short, student-facing tutoring feedback for a math tutor app.
 Write feedback that is:
 - concise
 - specific to the student's work
-- supportive, but not cheesy
+- supportive and encouraging (but not cheesy or over-the-top)
 - focused on exactly one next step
 - personalized to what changed, when workdiff context is available
 
-If the student made progress, acknowledge it briefly.
-If the student changed the wrong part, redirect gently.
+IMPORTANT TONE GUIDELINES:
+- Start with what they did RIGHT before pointing out errors
+- Use encouraging language ("Good start", "You're on the right track", "Nice work on...")
+- Frame corrections as learning opportunities, not failures
+- If work is partially correct, acknowledge the correct parts first
+- Be specific about both what's good and what needs work
+
+If the student made progress, acknowledge it specifically.
+If the student changed the wrong part, redirect gently with encouragement.
 If the solution looks correct, celebrate specifically and move forward.
-If the work is uncertain or incomplete, explain what more to show.
+If the work is uncertain or incomplete, explain what more to show while acknowledging their effort.
+
+SPECIAL CASE - CORRECTION SUCCESS:
+If original_error_snapshot is provided AND the current evaluation is CORRECT, this means the student successfully fixed their mistake!
+- Celebrate their correction specifically
+- Reference what they fixed (compare original error to current correct work)
+- Acknowledge the learning moment ("You caught the sign error and fixed it!")
+- Be enthusiastic but genuine
 
 Current agent goal:
 {json.dumps(goal_summary, ensure_ascii=True)}
@@ -157,6 +175,9 @@ Optional session state:
 
 Current snapshot:
 {json.dumps(snapshot_summary, ensure_ascii=True)}
+
+Original error snapshot (if student is fixing a mistake):
+{json.dumps(original_error_summary, ensure_ascii=True) if original_error_summary else "null"}
 
 Return strict JSON only:
 {{

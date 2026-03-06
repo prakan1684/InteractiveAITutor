@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 from typing import List
+import asyncio
 
 from app.core.logger import get_logger
 from app_v2.contracts.agent_goal import AgentGoal
@@ -53,7 +54,22 @@ class CheckOrchestrator:
         self.feedback_tool = FeedbackGeneratorTool()
         self.practice_problem_generator_tool = PracticeProblemGeneratorTool()
 
-
+    async def _retry_llm_call(self, func, *args, max_retries=2, **kwargs):
+        """Retry LLM calls with exponential backoff"""
+        for attempt in range(max_retries):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                logger.warning(
+                    "LLM call attempt %d/%d failed: %s - retrying in %.1fs",
+                    attempt + 1,
+                    max_retries,
+                    type(e).__name__,
+                    0.5 * (2 ** attempt)
+                )
+                await asyncio.sleep(0.5 * (2 ** attempt))
     
     async def run_check(self, request: CheckRequest) -> CheckResponse:
         started_at = datetime.utcnow()
@@ -81,7 +97,8 @@ class CheckOrchestrator:
 
         
         #evaluate current work (no previous snapshot needed)
-        evaluation_result = await self.evaluator_tool.evaluate(
+        evaluation_result = await self._retry_llm_call(
+            self.evaluator_tool.evaluate,
             snapshot=saved_snapshot,
             workdiff_result=None
         )
@@ -113,14 +130,20 @@ class CheckOrchestrator:
 
 
         #generate feedback 
+        
+        # Load original error snapshot if we're in correction mode for celebration context
+        original_error_snapshot = None
+        if session_state.original_error_snapshot_id:
+            original_error_snapshot = self.snapshot_store.get(session_state.original_error_snapshot_id)
 
-        feedback_output = await self.feedback_tool.generate(
+        feedback_output = await self._retry_llm_call(
+            self.feedback_tool.generate,
             snapshot=saved_snapshot,
             evaluation_result=evaluation_result,
             agent_goal=agent_goal,
             workdiff_result=workdiff_result,
             session_state=session_state,
-            
+            original_error_snapshot=original_error_snapshot,
         )
 
 
@@ -171,6 +194,12 @@ class CheckOrchestrator:
             status=status,
         )
 
+        # Track mode transitions for correction flow
+        current_mode = session_state.mode
+        was_in_correction_mode = current_mode == SessionMode.CORRECTION_ACTIVE
+        entering_correction_mode = next_mode == SessionMode.CORRECTION_ACTIVE and not was_in_correction_mode
+        exiting_correction_mode = current_mode == SessionMode.CORRECTION_ACTIVE and next_mode == SessionMode.NORMAL
+
         session_state.mode = next_mode
         session_state.updated_at = datetime.utcnow()
 
@@ -178,10 +207,19 @@ class CheckOrchestrator:
             session_state.active_reason_code = evaluation_result.reason_code
             session_state.active_step_id = evaluation_result.target_step.step_id if evaluation_result.target_step else None
             session_state.active_line_index = evaluation_result.target_step.line_index if evaluation_result.target_step else None
+            
+            # Store original error snapshot when first entering correction mode
+            if entering_correction_mode:
+                session_state.original_error_snapshot_id = saved_snapshot.snapshot_id
+                
         elif evaluation_result.verdict == EvaluationVerdict.CORRECT:
             session_state.active_reason_code = None
             session_state.active_step_id = None
             session_state.active_line_index = None
+            
+            # Clear original error snapshot when correction succeeds or mode resets
+            if exiting_correction_mode or session_state.original_error_snapshot_id:
+                session_state.original_error_snapshot_id = None
 
         
         self.session_state_store.save(session_state)
@@ -199,6 +237,7 @@ class CheckOrchestrator:
             agent_goal=agent_goal,
             new_snapshot_id=saved_snapshot.snapshot_id,
             started_at=started_at,
+            practice_problem=practice_problem,
         )
 
 
@@ -214,6 +253,21 @@ class CheckOrchestrator:
         conf = evaluation_result.confidence
         summary = evaluation_result.summary
         
+        # Low confidence safety override
+        if conf < 0.6:
+            goal = self._goal(
+                intent=TutorIntent.HANDLE_UNCERTAINTY,
+                title="Uncertain Evaluation",
+                message="I can't verify confidence in your solution.",
+                next_action="CLARIFY_AND_CHECK",
+                tools_planned=["solution_evaluator"],
+                tools_used=["solution_evaluator"] + (["workdiff"] if workdiff_result else []),
+            )
+            hint = self._resolve_hint(
+                summary=summary,
+                fallback="I can't verify this confidently yet. Clarify the next step and check again.",
+            )
+            return CheckStatus.UNCERTAIN, conf, hint, goal, current_mode
 
         # Optional override if correction attempt became a rewrite
         if workdiff_result and workdiff_result.change_type == ChangeType.REWRITE:
@@ -365,6 +419,10 @@ class CheckOrchestrator:
             )
         
         if matched_step is None:
+            logger.warning(
+                "Highlight target not found: focus_step_id=%s focus_line_index=%s",
+                focus_step_id, focus_line_index
+            )
             return []
         
         
