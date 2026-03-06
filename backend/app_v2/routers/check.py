@@ -16,10 +16,12 @@ from app.core.logger import get_logger
 from app_v2.contracts.check_api import CheckRequest, CheckResponse
 from app_v2.contracts.ios_payload import IOSAnalyzePayload
 from app_v2.contracts.ios_to_check import ios_payload_to_check_request
+from app_v2.contracts.trace import CheckTrace
 from app_v2.domain.enums import CheckStatus
 from app_v2.stores.snapshot_store import SnapshotStore
 from app_v2.stores.trace_store import TraceStore
 from app_v2.stores.session_state_store import SessionStateStore
+from app_v2.graph.workflow import tutor_graph
 
 
 
@@ -169,3 +171,30 @@ async def check_work_ios(payload: IOSAnalyzePayload) -> CheckResponse:
     )
     return await orchestrator.run_check(canonical_request)
 
+
+
+@router.post("/check/ios/graph", response_model=CheckResponse)
+async def check_work_ios_graph(payload: IOSAnalyzePayload) -> CheckResponse:
+    _log_ios_payload_summary(payload)
+
+
+    try:
+        canonical_request = ios_payload_to_check_request(
+            payload,
+            include_correction=False,
+            include_debug_trace=True,
+        )
+    except ValueError as e:
+        logger.warning("Adapter rejected iOS payload: %s", e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    result = await tutor_graph.ainvoke({"request": canonical_request})
+    return result['response']
+
+
+@router.get("/trace/{trace_id}", response_model=CheckTrace)
+async def get_trace(trace_id: str) -> CheckTrace:
+    trace = trace_store.get(trace_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
+    return trace
