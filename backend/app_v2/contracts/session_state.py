@@ -16,6 +16,7 @@ class SessionAgentState(BaseModel):
     active_reason_code: Optional[str] = None
     active_step_id: Optional[str] = None
     active_line_index: Optional[int] = Field(default=None, ge=0)
+    original_error_snapshot_id: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     
