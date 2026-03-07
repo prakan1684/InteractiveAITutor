@@ -1,29 +1,20 @@
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
-import re
 
 from app.core.logger import get_logger
 from app.services.ai_service import AIService
 from app_v2.contracts.diff_feedback import ChangedStepRef, DiffResult, EvaluationResult
 from app_v2.contracts.snapshot import Snapshot
 from app_v2.domain.enums import EvaluationVerdict
-
+from app_v2.orchestrator.verification_orchestrator import VerificationOrchestrator
+ 
 logger = get_logger(__name__)
-
-try:
-    from sympy import simplify, sympify, latex
-    from sympy.parsing.latex import parse_latex
-    SYMPY_AVAILABLE = True
-except ImportError:
-    SYMPY_AVAILABLE = False
-    logger.warning("SymPy not available - symbolic verification disabled")
-
-logger = get_logger(__name__)
-
 
 class SolutionEvaluatorTool:
     def __init__(self, model: str = "gpt-4o"):
         self.ai = AIService(default_model=model)
+        self.verification = VerificationOrchestrator()
 
     async def evaluate(
         self,
@@ -32,49 +23,87 @@ class SolutionEvaluatorTool:
     ) -> EvaluationResult:
         snapshot_summary = self._snapshot_summary(snapshot)
         workdiff_summary = self._workdiff_summary(workdiff_result)
-        prompt = self._build_prompt(snapshot_summary, workdiff_summary)
+        
+        steps_latex = [
+            step.normalized_latex or step.raw_myscript
+            for step in snapshot.steps
+        ]
 
+        #run symbolic verification and llm evaluation in parallel
+        verification_task = self.verification.verify(steps_latex)
+        llm_task = self._llm_evaluate(snapshot_summary, workdiff_summary, snapshot, workdiff_result)
+ 
+        verification_result, llm_result = await asyncio.gather(
+            verification_task, llm_task, return_exceptions=True
+        )
+
+        #handle exceptions from parallel calls
+
+        if isinstance(verification_result, Exception):
+            logger.error(f"Verification failed: {verification_result}")
+            verification_result = None
+        
+        if isinstance(llm_result, Exception):
+            logger.error(f"LLM evaluation failed: {llm_result}")
+            return EvaluationResult(
+                verdict=EvaluationVerdict.UNCERTAIN,
+                confidence=0.0,
+                reason_code="evaluator_error",
+                summary="I could not confidently evaluate this work yet.",
+                target_step=None,
+                math_engine_used=False,
+            )
+
+        #decision logic: symbolic verification overrides llm when available
+        if verification_result is not None and verification_result.is_correct is not None:
+            if verification_result.is_correct and llm_result.verdict != EvaluationVerdict.CORRECT:
+                logger.warning(
+                    "Symbolic verification PASSED but LLM said %s — overriding to CORRECT",
+                    llm_result.verdict,
+                )
+                llm_result.verdict = EvaluationVerdict.CORRECT
+                llm_result.confidence = verification_result.confidence
+                llm_result.reason_code = "verified_correct"
+                llm_result.summary = "Your work is mathematically correct."
+                llm_result.math_engine_used = True
+ 
+            elif not verification_result.is_correct and llm_result.verdict == EvaluationVerdict.CORRECT:
+                logger.warning(
+                    "Symbolic verification FAILED but LLM said CORRECT — overriding to NEEDS_REVISION",
+                )
+                llm_result.verdict = EvaluationVerdict.NEEDS_REVISION
+                llm_result.confidence = verification_result.confidence
+                llm_result.reason_code = "arithmetic_error_detected"
+                llm_result.summary = (
+                    f"There's a math error in your work. "
+                    f"The correct answer should be: {verification_result.correct_answer}"
+                    if verification_result.correct_answer
+                    else "There's a math error in your work. Check your calculations."
+                )
+                llm_result.math_engine_used = True
+        
+
+        return llm_result
+
+    async def _llm_evaluate(
+        self,
+        snapshot_summary: Dict[str, Any],
+        workdiff_summary: Optional[Dict[str, Any]],
+        snapshot: Snapshot,
+        workdiff_result: Optional[DiffResult],
+    ) -> EvaluationResult:
+        """Run the LLM-based evaluation."""
         try:
+            prompt = self._build_prompt(snapshot_summary, workdiff_summary)
             response = await self.ai.complete(
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 response_format={"type": "json_object"},
             )
             parsed = json.loads(response.content)
-            result = self._to_evaluation_result(parsed, snapshot, workdiff_result)
-            
-            # Symbolic verification sanity check - run for all verdicts
-            if SYMPY_AVAILABLE:
-                symbolic_check = self._verify_with_sympy(snapshot)
-                
-                # Override LLM if symbolic verification disagrees
-                if symbolic_check is True and result.verdict == EvaluationVerdict.NEEDS_REVISION:
-                    # LLM said wrong, but SymPy says correct - trust SymPy
-                    logger.warning(
-                        "SymPy verification PASSED but LLM said NEEDS_REVISION for snapshot %s - overriding to CORRECT",
-                        snapshot.snapshot_id
-                    )
-                    result.verdict = EvaluationVerdict.CORRECT
-                    result.confidence = 0.95
-                    result.reason_code = "verified_correct"
-                    result.summary = "Your work is correct."
-                    result.math_engine_used = True
-                    
-                elif symbolic_check is False and result.verdict == EvaluationVerdict.CORRECT:
-                    # LLM said correct, but SymPy says wrong - trust SymPy
-                    logger.warning(
-                        "SymPy verification FAILED but LLM said CORRECT for snapshot %s - overriding to NEEDS_REVISION",
-                        snapshot.snapshot_id
-                    )
-                    result.verdict = EvaluationVerdict.NEEDS_REVISION
-                    result.confidence = 0.95
-                    result.reason_code = "arithmetic_error_detected"
-                    result.summary = "There's an arithmetic error in your work. Check your calculations."
-                    result.math_engine_used = True
-            
-            return result
+            return self._to_evaluation_result(parsed, snapshot, workdiff_result)
         except Exception as e:
-            logger.error(f"Error evaluating solution: {e}")
+            logger.error(f"LLM evaluation error: {e}")
             return EvaluationResult(
                 verdict=EvaluationVerdict.UNCERTAIN,
                 confidence=0.0,
@@ -139,16 +168,17 @@ class SolutionEvaluatorTool:
         return f"""
 You are evaluating a student's current math work from structured canvas steps.
 
-CRITICAL: You must VERIFY THE MATH, not just check if it looks reasonable.
-- Work through each algebraic step yourself
-- Check arithmetic carefully (especially combining like terms, distributing negatives, sign errors)
-- Verify that each step follows logically from the previous one
-- Check that final answers are actually correct
+Your job is to verify mathematical correctness:
+- Check if each step follows logically from the previous one
+- Verify arithmetic (combining like terms, distributing, sign errors)
+- Allow for different valid approaches and intermediate simplifications
+- Students may skip trivial steps (like multiplying by 1) - that's fine
 
-Be conservative:
+Be balanced:
 - If the work appears incomplete, ambiguous, or insufficiently legible/structured, return UNCERTAIN.
-- If the student made ANY arithmetic or algebraic error, return NEEDS_REVISION.
-- Return CORRECT only when you have VERIFIED the math is actually correct.
+- If there is a clear mathematical error (wrong arithmetic, incorrect rule application), return NEEDS_REVISION.
+- Return CORRECT when the mathematical reasoning and final answer are correct, even if steps are condensed.
+- Don't penalize students for valid algebraic shortcuts or different solution paths.
 
 You may use the optional work-change context to understand what they edited, but evaluate the CURRENT snapshot.
 
@@ -204,70 +234,7 @@ Rules:
             math_engine_used=False,
         )
 
-    def _verify_with_sympy(self, snapshot: Snapshot) -> Optional[bool]:
-        """
-        Attempt symbolic verification of algebraic work.
-        Returns:
-            True if verification passes
-            False if verification fails (arithmetic error detected)
-            None if verification cannot be performed
-        """
-        if not SYMPY_AVAILABLE or len(snapshot.steps) < 2:
-            return None
-        
-        try:
-            # Look for simplification problems: expression = result
-            # Common pattern: "(3x^2 - 2x^2 + 4) - (4x^2 - 3) =" followed by "= -x^2 + 7"
-            
-            first_step_text = snapshot.steps[0].normalized_latex or snapshot.steps[0].raw_myscript
-            last_step_text = snapshot.steps[-1].normalized_latex or snapshot.steps[-1].raw_myscript
-            
-            # Extract left side of first equation (before =)
-            first_match = re.search(r'^(.+?)=', first_step_text)
-            if not first_match:
-                return None
-            
-            original_expr = first_match.group(1).strip()
-            
-            # Extract right side of last equation (after =)
-            last_match = re.search(r'=(.+?)$', last_step_text)
-            if not last_match:
-                return None
-            
-            final_result = last_match.group(1).strip()
-            
-            # Parse and simplify both expressions
-            original_sympy = parse_latex(original_expr)
-            result_sympy = parse_latex(final_result)
-            
-            # Simplify the original and compare to claimed result
-            simplified_original = simplify(original_sympy)
-            simplified_result = simplify(result_sympy)
-            
-            # Check if they're equivalent
-            difference = simplify(simplified_original - simplified_result)
-            
-            if difference == 0:
-                logger.info(
-                    "SymPy verification PASSED for snapshot %s: %s simplifies to %s",
-                    snapshot.snapshot_id,
-                    original_expr,
-                    final_result
-                )
-                return True
-            else:
-                logger.warning(
-                    "SymPy verification FAILED for snapshot %s: %s should be %s, not %s",
-                    snapshot.snapshot_id,
-                    original_expr,
-                    simplified_original,
-                    final_result
-                )
-                return False
-                
-        except Exception as e:
-            logger.debug("SymPy verification could not be performed: %s", e)
-            return None
+    
     
     def _coerce_verdict(self, value: Any) -> EvaluationVerdict:
         raw = str(value or "UNCERTAIN").upper()

@@ -56,3 +56,27 @@ class TutorIntent(str, Enum):
     CELEBRATE_AND_ADVANCE = "CELEBRATE_AND_ADVANCE"
     RESET_BASELINE = "RESET_BASELINE"
     HANDLE_UNCERTAINTY = "HANDLE_UNCERTAINTY"
+
+
+
+
+#============================================================
+# New Enums for Robust Solution
+#============================================================
+
+class ProblemType(str, Enum):
+    DERIVATIVE = "derivative"
+    INTEGRAL = "integral"
+    SIMPLIFY = "simplify"
+    FACTOR = "factor"
+    EXPAND = "expand"
+    SOLVE_EQUATION = "solve_equation"
+    TRIG_IDENTITY = "trig_identity"
+    LIMIT = "limit"
+    UNKNOWN = "unknown"
+
+
+class VerificationMethod(str, Enum):
+    SYMBOLIC = "symbolic"
+    LLM = "llm"
+    NONE = "none"
