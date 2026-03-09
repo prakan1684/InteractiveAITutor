@@ -150,17 +150,20 @@ class SymbolicVerifierTool:
         Core comparison: checks if simplify(correct - student) == 0.
         Used by most handlers.
         """
-
-        difference = simplify(correct - student)
+        # Simplify both sides before comparing to handle algebraically equivalent forms
+        correct_simplified = simplify(correct)
+        student_simplified = simplify(student)
+        
+        difference = simplify(correct_simplified - student_simplified)
         is_correct = (difference == 0)
-        correct_latex = latex(correct)
+        correct_latex = latex(correct_simplified)
 
         if is_correct:
             logger.info("Symbolic %s verification PASSED", operation)
         else:
             logger.warning(
                 "Symbolic %s verification FAILED: expected %s, got %s",
-                operation, correct_latex, latex(student),
+                operation, correct_latex, latex(student_simplified),
             )
 
 
@@ -170,7 +173,7 @@ class SymbolicVerifierTool:
             method=VerificationMethod.SYMBOLIC,
             explanation="Symbolic verification",
             correct_answer=correct_latex,
-            details={"correct": str(correct), "student": str(student), "difference": str(difference)},
+            details={"correct": str(correct_simplified), "student": str(student_simplified), "difference": str(difference)},
         )
 
         

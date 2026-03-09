@@ -22,33 +22,49 @@ class VerificationOrchestrator:
         self.symbolic_verifier = SymbolicVerifierTool()
     
     async def verify(self, steps_latex: List[str]) -> VerificationResult:
+        logger.info("=" * 80)
+        logger.info("VERIFICATION ORCHESTRATOR START")
+        logger.info("=" * 80)
+        logger.info("Input: %d steps", len(steps_latex))
+        for i, step in enumerate(steps_latex):
+            logger.info("  Step %d: %s", i, step[:100] + "..." if len(step) > 100 else step)
+        
         if not steps_latex or len(steps_latex) < 2:
+            logger.warning("Not enough steps to verify (need at least 2)")
             return VerificationResult(
                 explanation="Not enough steps to verify"
             )
-        #layer 1 LLM CLASSIFICATION
+        
+        # Layer 1: LLM CLASSIFICATION
+        logger.info("-" * 80)
+        logger.info("LAYER 1: LLM CLASSIFIER")
+        logger.info("-" * 80)
         classification = await self.classifier.classify(steps_latex)
 
-        logger.info(
-            "Math classification: type=%s expression=%s student_answer=%s confidence=%.2f",
-            classification.problem_type,
-            classification.expression,
-            classification.student_answer,
-            classification.confidence,
-        )
+        logger.info("Classification result:")
+        logger.info("  Problem type: %s", classification.problem_type)
+        logger.info("  Expression: %s", classification.expression)
+        logger.info("  Variable: %s", classification.variable)
+        logger.info("  Student answer: %s", classification.student_answer)
+        logger.info("  Confidence: %.2f", classification.confidence)
 
-        #layer 2 SYMBOLIC VERIFICATION
+        # Layer 2: SYMBOLIC VERIFICATION
+        logger.info("-" * 80)
+        logger.info("LAYER 2: SYMBOLIC VERIFIER")
+        logger.info("-" * 80)
         result = self.symbolic_verifier.verify(
             classification=classification
         )
 
-        logger.info(
-            "Verification result: is_correct=%s confidence=%.2f method=%s explanation=%s",
-            result.is_correct,
-            result.confidence,
-            result.method,
-            result.explanation,
-        )
-
+        logger.info("Symbolic verification result:")
+        logger.info("  Is correct: %s", result.is_correct)
+        logger.info("  Confidence: %.2f", result.confidence)
+        logger.info("  Method: %s", result.method)
+        logger.info("  Explanation: %s", result.explanation)
+        if result.correct_answer:
+            logger.info("  Correct answer: %s", result.correct_answer)
+        logger.info("=" * 80)
+        logger.info("VERIFICATION ORCHESTRATOR END")
+        logger.info("=" * 80)
 
         return result

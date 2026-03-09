@@ -48,6 +48,9 @@ class EvaluationResult(BaseModel):
     verdict: EvaluationVerdict
     confidence: float = Field(..., ge=0.0, le=1.0)
     reason_code: str = Field(..., min_length=1)
+    
+    # Store verification result for feedback generation
+    verification_result: Optional[dict] = Field(default=None, description="Symbolic verification details")
     summary: str = Field(..., min_length=1)
 
     target_step: Optional[ChangedStepRef] = None

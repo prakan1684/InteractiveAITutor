@@ -55,12 +55,17 @@ class SolutionEvaluatorTool:
             )
 
         #decision logic: symbolic verification overrides llm when available
+        logger.info("=" * 80)
+        logger.info("DECISION LOGIC: Comparing SymPy vs LLM")
+        logger.info("=" * 80)
+        logger.info("SymPy result: is_correct=%s, method=%s", 
+                   verification_result.is_correct if verification_result else None,
+                   verification_result.method if verification_result else None)
+        logger.info("LLM result: verdict=%s, confidence=%.2f", llm_result.verdict, llm_result.confidence)
+        
         if verification_result is not None and verification_result.is_correct is not None:
             if verification_result.is_correct and llm_result.verdict != EvaluationVerdict.CORRECT:
-                logger.warning(
-                    "Symbolic verification PASSED but LLM said %s — overriding to CORRECT",
-                    llm_result.verdict,
-                )
+                logger.warning("🔄 OVERRIDE: SymPy says CORRECT, LLM said %s — trusting SymPy", llm_result.verdict)
                 llm_result.verdict = EvaluationVerdict.CORRECT
                 llm_result.confidence = verification_result.confidence
                 llm_result.reason_code = "verified_correct"
@@ -68,9 +73,8 @@ class SolutionEvaluatorTool:
                 llm_result.math_engine_used = True
  
             elif not verification_result.is_correct and llm_result.verdict == EvaluationVerdict.CORRECT:
-                logger.warning(
-                    "Symbolic verification FAILED but LLM said CORRECT — overriding to NEEDS_REVISION",
-                )
+                logger.warning("🔄 OVERRIDE: SymPy says INCORRECT, LLM said CORRECT — trusting SymPy")
+                logger.info("Correct answer should be: %s", verification_result.correct_answer)
                 llm_result.verdict = EvaluationVerdict.NEEDS_REVISION
                 llm_result.confidence = verification_result.confidence
                 llm_result.reason_code = "arithmetic_error_detected"
@@ -81,6 +85,20 @@ class SolutionEvaluatorTool:
                     else "There's a math error in your work. Check your calculations."
                 )
                 llm_result.math_engine_used = True
+            else:
+                logger.info("✅ AGREEMENT: SymPy and LLM agree (is_correct=%s, verdict=%s)", 
+                           verification_result.is_correct, llm_result.verdict)
+        else:
+            logger.info("⚠️  FALLBACK: SymPy couldn't verify, using LLM result only")
+        
+        # Store verification result for feedback generation
+        if verification_result is not None:
+            llm_result.verification_result = verification_result.model_dump()
+        
+        logger.info("=" * 80)
+        logger.info("FINAL RESULT: verdict=%s, confidence=%.2f, math_engine_used=%s",
+                   llm_result.verdict, llm_result.confidence, llm_result.math_engine_used)
+        logger.info("=" * 80)
         
 
         return llm_result

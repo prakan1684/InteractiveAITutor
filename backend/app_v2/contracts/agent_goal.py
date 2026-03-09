@@ -25,3 +25,9 @@ class AgentGoal(BaseModel):
     # Optional focus target for canvas-linked guidance
     focus_step_id: Optional[str] = None
     focus_line_index: Optional[int] = Field(default=None, ge=0)
+    
+    # LaTeX expressions for iPad rendering (from feedback generator)
+    problem_latex: Optional[str] = Field(default=None, description="Original problem in LaTeX")
+    student_work_latex: Optional[str] = Field(default=None, description="Student's work/answer in LaTeX")
+    correct_answer_latex: Optional[str] = Field(default=None, description="Correct answer in LaTeX (if applicable)")
+    error_location_latex: Optional[str] = Field(default=None, description="Specific error step in LaTeX (if applicable)")
