@@ -25,6 +25,7 @@ class FeedbackGeneratorTool:
         workdiff_result: Optional[DiffResult] = None,
         session_state: Optional[SessionAgentState] = None,
         original_error_snapshot: Optional[Snapshot] = None,
+        verification_result: Optional[Any] = None,
     ) -> FeedbackOutput:
         snapshot_summary = self._snapshot_summary(snapshot)
         evaluation_summary = self._evaluation_summary(evaluation_result)
@@ -32,6 +33,7 @@ class FeedbackGeneratorTool:
         session_state_summary = self._session_state_summary(session_state)
         goal_summary = self._goal_summary(agent_goal)
         original_error_summary = self._snapshot_summary(original_error_snapshot) if original_error_snapshot else None
+        verification_summary = self._verification_summary(verification_result) if verification_result else None
         prompt = self._build_prompt(
             snapshot_summary=snapshot_summary,
             evaluation_summary=evaluation_summary,
@@ -39,6 +41,7 @@ class FeedbackGeneratorTool:
             session_state_summary=session_state_summary,
             goal_summary=goal_summary,
             original_error_summary=original_error_summary,
+            verification_summary=verification_summary,
         )
 
         try:
@@ -121,6 +124,20 @@ class FeedbackGeneratorTool:
             "tools_planned": agent_goal.tools_planned,
             "tools_used": agent_goal.tools_used,
         }
+    
+    def _verification_summary(self, verification_result: Any) -> Optional[Dict[str, Any]]:
+        """Extract verification details for more specific feedback"""
+        if not verification_result:
+            return None
+        
+        return {
+            "is_correct": getattr(verification_result, "is_correct", None),
+            "confidence": getattr(verification_result, "confidence", 0.0),
+            "method": getattr(verification_result, "method", None),
+            "explanation": getattr(verification_result, "explanation", ""),
+            "correct_answer": getattr(verification_result, "correct_answer", None),
+            "details": getattr(verification_result, "details", {}),
+        }
 
     def _build_prompt(
         self,
@@ -131,28 +148,30 @@ class FeedbackGeneratorTool:
         session_state_summary: Optional[Dict[str, Any]],
         goal_summary: Dict[str, Any],
         original_error_summary: Optional[Dict[str, Any]],
+        verification_summary: Optional[Dict[str, Any]],
     ) -> str:
         return f"""
-You are generating short, student-facing tutoring feedback for a math tutor app.
+You are generating detailed, personalized tutoring feedback for a math tutor app that renders LaTeX.
 
 Write feedback that is:
-- concise
-- specific to the student's work
-- supportive and encouraging (but not cheesy or over-the-top)
-- focused on exactly one next step
-- personalized to what changed, when workdiff context is available
+- SPECIFIC to the exact problem and student's work (include LaTeX expressions)
+- Supportive and encouraging (but not cheesy)
+- Detailed about what they did right/wrong
+- Includes the actual math expressions they worked with
 
-IMPORTANT TONE GUIDELINES:
+IMPORTANT - INCLUDE LATEX:
+- Extract the original problem from the student's first step(s) and include it in problem_latex
+- Extract the student's final answer and include it in student_work_latex
+- If there's an error, include the correct answer in correct_answer_latex
+- If there's a specific error step, include it in error_location_latex
+- Use clean LaTeX (remove \\left, \\right, \\dfrac → \\frac)
+
+TONE GUIDELINES:
 - Start with what they did RIGHT before pointing out errors
 - Use encouraging language ("Good start", "You're on the right track", "Nice work on...")
 - Frame corrections as learning opportunities, not failures
-- If work is partially correct, acknowledge the correct parts first
-- Be specific about both what's good and what needs work
-
-If the student made progress, acknowledge it specifically.
-If the student changed the wrong part, redirect gently with encouragement.
-If the solution looks correct, celebrate specifically and move forward.
-If the work is uncertain or incomplete, explain what more to show while acknowledging their effort.
+- Be SPECIFIC about the math: "You correctly applied the product rule to $(x^2+1)(x+3)$..."
+- Reference their actual work: "Your answer of $3x^2+6x+1$ is correct!"
 
 SPECIAL CASE - CORRECTION SUCCESS:
 If original_error_snapshot is provided AND the current evaluation is CORRECT, this means the student successfully fixed their mistake!
@@ -161,11 +180,20 @@ If original_error_snapshot is provided AND the current evaluation is CORRECT, th
 - Acknowledge the learning moment ("You caught the sign error and fixed it!")
 - Be enthusiastic but genuine
 
+VERIFICATION CONTEXT:
+If verification_summary is provided, use it to be more specific:
+- If method is "symbolic", mention that their work was verified mathematically
+- If correct_answer is provided, include it in your feedback and correct_answer_latex
+- Reference the specific problem type (derivative, integral, simplify, etc.)
+
 Current agent goal:
 {json.dumps(goal_summary, ensure_ascii=True)}
 
 Evaluation result:
 {json.dumps(evaluation_summary, ensure_ascii=True)}
+
+Verification details (symbolic math engine results):
+{json.dumps(verification_summary, ensure_ascii=True) if verification_summary else "null"}
 
 Optional workdiff result:
 {json.dumps(workdiff_summary, ensure_ascii=True)}
@@ -182,13 +210,17 @@ Original error snapshot (if student is fixing a mistake):
 Return strict JSON only:
 {{
   "title": "short title",
-  "message": "1-2 sentence student-facing explanation",
+  "message": "2-3 sentence detailed explanation with specific references to their work",
   "hint": "short next-step hint",
   "encouragement": "optional short encouragement",
   "next_action": "string action",
   "focus_step_id": "optional step id",
   "focus_line_index": 0,
-  "tone": "supportive"
+  "tone": "supportive",
+  "problem_latex": "original problem in clean LaTeX (no \\\\left/\\\\right, use \\\\frac not \\\\dfrac)",
+  "student_work_latex": "student's answer in clean LaTeX",
+  "correct_answer_latex": "correct answer in clean LaTeX (if applicable)",
+  "error_location_latex": "specific error step in clean LaTeX (if applicable)"
 }}
 
 Rules:
@@ -208,6 +240,12 @@ Rules:
         focus_step_id = self._coerce_optional_text(parsed.get("focus_step_id"))
         focus_line_index = self._coerce_optional_line_index(parsed.get("focus_line_index"))
         tone = self._coerce_non_empty(parsed.get("tone"), "supportive")
+        
+        # Extract LaTeX expressions
+        problem_latex = self._coerce_optional_text(parsed.get("problem_latex"))
+        student_work_latex = self._coerce_optional_text(parsed.get("student_work_latex"))
+        correct_answer_latex = self._coerce_optional_text(parsed.get("correct_answer_latex"))
+        error_location_latex = self._coerce_optional_text(parsed.get("error_location_latex"))
 
         return FeedbackOutput(
             title=title,
@@ -218,6 +256,10 @@ Rules:
             focus_step_id=focus_step_id,
             focus_line_index=focus_line_index,
             tone=tone,
+            problem_latex=problem_latex,
+            student_work_latex=student_work_latex,
+            correct_answer_latex=correct_answer_latex,
+            error_location_latex=error_location_latex,
         )
 
     def _fallback_feedback(self, agent_goal: AgentGoal) -> FeedbackOutput:

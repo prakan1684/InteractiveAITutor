@@ -136,6 +136,13 @@ class CheckOrchestrator:
         if session_state.original_error_snapshot_id:
             original_error_snapshot = self.snapshot_store.get(session_state.original_error_snapshot_id)
 
+        # Extract verification_result from evaluation_result if available
+        verification_result = None
+        if evaluation_result.verification_result:
+            # Convert dict back to object-like structure for feedback generator
+            from types import SimpleNamespace
+            verification_result = SimpleNamespace(**evaluation_result.verification_result)
+        
         feedback_output = await self._retry_llm_call(
             self.feedback_tool.generate,
             snapshot=saved_snapshot,
@@ -144,6 +151,7 @@ class CheckOrchestrator:
             workdiff_result=workdiff_result,
             session_state=session_state,
             original_error_snapshot=original_error_snapshot,
+            verification_result=verification_result,
         )
 
 
@@ -153,6 +161,12 @@ class CheckOrchestrator:
         agent_goal.next_action = feedback_output.next_action
         agent_goal.focus_step_id = feedback_output.focus_step_id
         agent_goal.focus_line_index = feedback_output.focus_line_index
+        
+        # Transfer LaTeX expressions for iPad rendering
+        agent_goal.problem_latex = feedback_output.problem_latex
+        agent_goal.student_work_latex = feedback_output.student_work_latex
+        agent_goal.correct_answer_latex = feedback_output.correct_answer_latex
+        agent_goal.error_location_latex = feedback_output.error_location_latex
 
 
         trace.events.append(
